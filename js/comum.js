@@ -5,7 +5,7 @@
 
 export const PRESETS = {
   CT: [
-    { nome: 'Tec. moles', centro: 40, largura: 400 },
+    { nome: 'Partes moles', centro: 40, largura: 400 },
     { nome: 'Pulmão', centro: -600, largura: 1500 },
     { nome: 'Osso', centro: 400, largura: 1800 },
     { nome: 'Cérebro', centro: 40, largura: 80 },

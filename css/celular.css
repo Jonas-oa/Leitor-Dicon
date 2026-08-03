@@ -113,6 +113,44 @@ button, select, input { font: inherit; color: inherit; }
 .fer.ativo { color: var(--azul); }
 .fer:active { background: rgba(255,255,255,.06); }
 
+/* Presets principais: aparecem sobre o visor, logo acima das ferramentas. */
+.menu-janela {
+  position: fixed;
+  left: 8px;
+  right: 8px;
+  bottom: calc(var(--abas) + var(--seguro-baixo) + var(--ferramentas) + 8px);
+  z-index: 20;
+  padding: 6px;
+  border: 1px solid var(--borda);
+  border-radius: 12px;
+  background: rgba(13, 20, 32, .96);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+  animation: subir-janela .16s ease-out;
+}
+.menu-janela > div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.menu-janela button {
+  min-width: 0;
+  min-height: 38px;
+  padding: 7px 5px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--painel-2);
+  color: var(--texto-fraco);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.menu-janela button.ativo {
+  border-color: var(--azul);
+  background: rgba(79, 168, 255, .18);
+  color: #cfe6ff;
+  font-weight: 600;
+}
+.menu-janela button:active { background: rgba(79, 168, 255, .28); }
+@keyframes subir-janela {
+  from { transform: translateY(10px); opacity: 0; }
+}
+
 .abas {
   display: grid; grid-template-columns: repeat(5, 1fr);
   background: #0a111c; border-top: 1px solid var(--borda);

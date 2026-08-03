@@ -126,6 +126,41 @@ for (const dpr of DENSIDADES) {
   });
   await pagina.waitForTimeout(400);
 
+  // O botão Janela abre os três presets principais logo acima da barra.
+  const botaoJanela = pagina.locator('[data-fer="janela"]');
+  const menuJanela = pagina.locator('#menuJanela');
+  await botaoJanela.click();
+  await menuJanela.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+  const nomes = await menuJanela.locator('button').allTextContents();
+  let okMenu = JSON.stringify(nomes) === JSON.stringify(['Pulmão', 'Partes moles', 'Osso']);
+  const posicao = await pagina.evaluate(() => {
+    const menu = document.getElementById('menuJanela').getBoundingClientRect();
+    const ferramentas = document.getElementById('ferramentas').getBoundingClientRect();
+    return { visivel: !document.getElementById('menuJanela').hidden,
+      acima: menu.bottom <= ferramentas.top && ferramentas.top - menu.bottom <= 12 };
+  });
+  okMenu = okMenu && posicao.visivel && posicao.acima;
+  if (!okMenu) falhas++;
+  console.log(`${okMenu ? 'ok   ' : 'FALHA'} menu Janela horizontal: ${nomes.join(', ')}`);
+
+  for (const [nome, centro, largura] of [
+    ['Pulmão', -600, 1500], ['Partes moles', 40, 400], ['Osso', 400, 1800],
+  ]) {
+    await menuJanela.getByRole('button', { name: nome, exact: true }).click();
+    const janela = await pagina.evaluate(() => ({ ...window.leitorDicom.estado.janela }));
+    const ativo = await menuJanela.getByRole('button', { name: nome, exact: true })
+      .getAttribute('aria-pressed');
+    const ok = janela.centro === centro && janela.largura === largura && ativo === 'true';
+    if (!ok) falhas++;
+    console.log(`${ok ? 'ok   ' : 'FALHA'} preset ${nome}: C ${janela.centro} / L ${janela.largura}`);
+  }
+
+  await botaoJanela.click();
+  const fechou = await menuJanela.isHidden();
+  if (!fechou) falhas++;
+  console.log(`${fechou ? 'ok   ' : 'FALHA'} segundo toque em Janela fecha o menu`);
+  await pagina.locator('[data-fer="cursor"]').click();
+
   for (const alvo of [[8, 12], [25, 30], [41, 47]]) {
     const ponto = await pagina.evaluate((a) => {
       const vp = window.leitorDicom.viewports.axial;

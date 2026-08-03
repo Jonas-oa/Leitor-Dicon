@@ -43,6 +43,7 @@ let emGrade = false;
 let anim3d = null;
 let sequenciaCarga = 0;
 let controladorCarga = null;
+const NOMES_PRESETS_RAPIDOS = ['Pulmão', 'Partes moles', 'Osso'];
 
 function novaCarga() {
   controladorCarga?.abort();
@@ -69,6 +70,7 @@ function iniciar() {
 
   for (const [k, v] of Object.entries(PALETAS)) $('ctrlPaleta').append(new Option(v.rotulo, k));
   for (const [k, v] of Object.entries(TRANSFERENCIAS)) $('ctrlTransfer').append(new Option(v.rotulo, k));
+  montarPresetsRapidos(PRESETS.CT);
 
   marcarPerfil(perfil);
   ligarNavegacao();
@@ -152,7 +154,6 @@ function aplicarVolume(volume, meta = null, carga = null) {
   $('ctrlPaleta').value = estado.paleta;
 
   const presets = PRESETS.CT;
-  montarPresets(presets);
   definirJanela(resolverPreset(presets[0], volume));
 
   $('tituloExame').textContent = meta ? meta.label : (volume.descricaoSerie || volume.modalidade);
@@ -182,20 +183,41 @@ function aplicarVolume(volume, meta = null, carga = null) {
   dimensionar();
 }
 
-function montarPresets(presets) {
-  const cont = $('presets');
+function montarPresetsRapidos(presets) {
+  const cont = $('presetsRapidos');
   cont.replaceChildren();
-  presets.forEach((p, i) => {
+  const rapidos = NOMES_PRESETS_RAPIDOS.map((nome) => presets.find((p) => p.nome === nome))
+    .filter(Boolean);
+  rapidos.forEach((p) => {
     const b = document.createElement('button');
-    b.className = 'chip' + (i === 0 ? ' ativo' : '');
+    b.type = 'button';
     b.textContent = p.nome;
+    b.dataset.centro = p.centro;
+    b.dataset.largura = p.largura;
+    b.setAttribute('aria-pressed', 'false');
     b.addEventListener('click', () => {
-      cont.querySelectorAll('.chip').forEach((c) => c.classList.remove('ativo'));
-      b.classList.add('ativo');
       definirJanela(resolverPreset(p, estado.volume));
     });
     cont.append(b);
   });
+  sincronizarPresetRapido();
+}
+
+function sincronizarPresetRapido() {
+  const cont = $('presetsRapidos');
+  if (!cont) return;
+  cont.querySelectorAll('button').forEach((b) => {
+    const ativo = +b.dataset.centro === estado.janela.centro
+      && +b.dataset.largura === estado.janela.largura;
+    b.classList.toggle('ativo', ativo);
+    b.setAttribute('aria-pressed', String(ativo));
+  });
+}
+
+function mostrarMenuJanela(mostrar) {
+  $('menuJanela').hidden = !mostrar;
+  const botao = $('ferramentas').querySelector('[data-fer="janela"]');
+  botao.setAttribute('aria-expanded', String(mostrar));
 }
 
 function definirJanela({ centro, largura }) {
@@ -256,6 +278,7 @@ function aoMudarJanela() {
   $('ctrlJanelaLargura').value = j.largura;
   $('valCentro').textContent = j.centro;
   $('valLargura').textContent = j.largura;
+  sincronizarPresetRapido();
   redesenhar();
   agendar3d();
 }
@@ -324,6 +347,7 @@ function ligarNavegacao() {
     $('ferramentas').style.visibility = (!emGrade && planoAtivo === 'tridi') ? 'hidden' : '';
     // na grade 2×2 cada quadro já mostra os próprios dados; a leitura sobraria
     $('leitura').hidden = emGrade || !estado.volume;
+    mostrarMenuJanela(false);
     sincronizarCorte();
     requestAnimationFrame(dimensionar);
   });
@@ -331,9 +355,11 @@ function ligarNavegacao() {
   $('ferramentas').addEventListener('click', (e) => {
     const b = e.target.closest('.fer');
     if (!b) return;
+    const abrirPresets = b.dataset.fer === 'janela' && $('menuJanela').hidden;
     $('ferramentas').querySelectorAll('.fer').forEach((x) => x.classList.remove('ativo'));
     b.classList.add('ativo');
     estado.ferramenta = b.dataset.fer;
+    mostrarMenuJanela(abrirPresets);
   });
 
   // no modo 2×2, tocar num viewport passa o foco do controle de corte para ele
@@ -377,6 +403,7 @@ function ligarFolhas() {
 }
 
 function abrirFolha(id) {
+  mostrarMenuJanela(false);
   fecharFolhas();
   $('cortina').hidden = false;
   $(id).hidden = false;

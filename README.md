@@ -93,7 +93,7 @@ sagital, 3D e a grade 2×2. A barra de ferramentas define o que **um dedo** faz:
 | | |
 |---|---|
 | **Cursor** | posiciona o crosshair |
-| **Janela** | ajusta largura (horizontal) e centro (vertical) |
+| **Janela** | abre os presets Pulmão, Partes moles e Osso; com um dedo, ajusta largura (horizontal) e centro (vertical) |
 | **Mover** | desloca a imagem |
 | **Cortes** | arrasta para cima/baixo para percorrer os cortes |
 
