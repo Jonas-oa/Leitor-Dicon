@@ -8,6 +8,7 @@ import { Renderizador3D, TRANSFERENCIAS } from './render3d.js';
 import {
   PRESETS, TRANSFER_PADRAO, PALETA_PADRAO, resolverPreset,
   carregarManifesto as buscarManifesto, urlsDaSerie, arquivosDoDrop,
+  criarCartaoExame, criarOpcaoSerie, preencherDetalhes,
 } from './comum.js';
 
 const $ = (id) => document.getElementById(id);
@@ -33,6 +34,15 @@ let viewports = [];
 let render3d = null;
 let manifesto = [];
 let anim3d = null;
+let sequenciaCarga = 0;
+let controladorCarga = null;
+
+function novaCarga() {
+  controladorCarga?.abort();
+  controladorCarga = new AbortController();
+  const id = ++sequenciaCarga;
+  return { id, sinal: controladorCarga.signal, atual: () => id === sequenciaCarga };
+}
 
 // ---------------------------------------------------------------------------
 function iniciar() {
@@ -78,38 +88,35 @@ async function carregarManifesto() {
   try {
     manifesto = await buscarManifesto();
   } catch {
-    lista.innerHTML = '<p class="dica">Nenhum exame de exemplo encontrado. '
-      + 'Rode <code>python3 scripts/prepare_datasets.py all</code> ou abra uma pasta local.</p>';
+    const aviso = document.createElement('p');
+    aviso.className = 'dica';
+    aviso.textContent = 'Nenhum exame de exemplo encontrado. Rode '
+      + 'python3 scripts/prepare_datasets.py all ou abra uma pasta local.';
+    lista.replaceChildren(aviso);
     return;
   }
 
-  lista.innerHTML = '';
+  lista.replaceChildren();
   for (const s of manifesto) {
-    const b = document.createElement('button');
-    b.className = 'cartao';
-    b.dataset.id = s.id;
-    b.innerHTML = `
-      <img src="datasets/${s.id}.png" alt="" loading="lazy">
-      <span>
-        <b>${s.label}</b>
-        <small>${s.region}</small>
-        <span class="tag">${s.modality} · ${s.files} cortes · ${(s.bytes / 1e6).toFixed(0)} MB</span>
-      </span>`;
+    const b = criarCartaoExame(s,
+      `${s.modality} · ${s.files} cortes · ${(s.bytes / 1e6).toFixed(0)} MB`);
     b.addEventListener('click', () => abrirExame(s));
     lista.append(b);
   }
 }
 
 async function abrirExame(s) {
+  const carga = novaCarga();
   document.querySelectorAll('.cartao').forEach((c) => {
     c.classList.toggle('ativo', c.dataset.id === s.id);
   });
   const urls = urlsDaSerie(s);
   await comProgresso(async (p) => {
-    const arquivos = await carregarUrls(urls, p);
+    const arquivos = await carregarUrls(urls, p, 8, carga.sinal);
+    if (!carga.atual()) return;
     p('Montando volume…', 0.9);
     aplicarVolume(montarVolume(arquivos, p), s);
-  });
+  }, carga.id);
 }
 
 // ---------------------------------------------------------------------------
@@ -119,7 +126,7 @@ function aplicarVolume(volume, meta = null) {
   estado.paleta = PALETA_PADRAO[volume.modalidade] || 'cinza';
   $('ctrlPaleta').value = estado.paleta;
 
-  const presets = PRESETS[volume.modalidade] || PRESETS.MR;
+  const presets = PRESETS.CT;
   definirJanela(resolverPreset(presets[0], volume));
   montarPresets(presets);
 
@@ -141,7 +148,7 @@ function aplicarVolume(volume, meta = null) {
   viewports.forEach((v) => v.ajustar());
 
   if (render3d.disponivel) {
-    const t = TRANSFER_PADRAO[volume.modalidade] || 'neutra';
+    const t = TRANSFER_PADRAO.CT;
     $('ctrlTransfer').value = t;
     render3d.definirTransferencia(t);
     render3d.janela = estado.janela;
@@ -155,7 +162,7 @@ function aplicarVolume(volume, meta = null) {
 
 function montarPresets(presets) {
   const cont = $('presets');
-  cont.innerHTML = '';
+  cont.replaceChildren();
   presets.forEach((p, i) => {
     const b = document.createElement('button');
     b.className = 'chip' + (i === 0 ? ' ativo' : '');
@@ -189,15 +196,11 @@ function mostrarDetalhes(v, meta) {
   if (v.fabricante) linhas.push(['Equipamento', v.fabricante]);
 
   const avisos = [];
-  if (v.obliquo) avisos.push('Aquisição oblíqua: os planos foram alinhados ao eixo anatômico mais próximo.');
-  if (v.espacamentoIrregular) avisos.push('Espaçamento entre cortes irregular; foi usada a mediana.');
   if (v.descartados) avisos.push(`${v.descartados} imagem(ns) com dimensão divergente foram ignoradas.`);
   if (meta?.notes) avisos.push(meta.notes);
   if (meta?.attribution) avisos.push(`Fonte: ${meta.attribution}.`);
 
-  $('detalhes').innerHTML = linhas
-    .map(([k, val]) => `<div><dt>${k}</dt><dd>${val}</dd></div>`).join('')
-    + (avisos.length ? `<span class="obs">${avisos.join('<br>')}</span>` : '');
+  preencherDetalhes($('detalhes'), linhas, avisos);
 }
 
 // ---------------------------------------------------------------------------
@@ -324,8 +327,12 @@ function ligarControles() {
     render3d.sombrear = e.target.checked; agendar3d();
   });
 
-  $('entradaPasta').addEventListener('change', (e) => abrirLocais(e.target.files));
-  $('entradaArquivos').addEventListener('change', (e) => abrirLocais(e.target.files));
+  for (const id of ['entradaPasta', 'entradaArquivos']) {
+    $(id).addEventListener('change', async (e) => {
+      await abrirLocais(e.target.files);
+      e.target.value = '';
+    });
+  }
   $('fecharErro').addEventListener('click', () => { $('erro').hidden = true; });
   $('cancelarSerie').addEventListener('click', () => { $('seletorSerie').hidden = true; });
 
@@ -377,33 +384,37 @@ function ligarArrastarSoltar() {
 
 async function abrirLocais(fileList) {
   if (!fileList || !fileList.length) return;
+  const carga = novaCarga();
   await comProgresso(async (p) => {
     const series = await carregarArquivosLocais(fileList, p);
-    if (!series.length) throw new Error('Nenhum arquivo DICOM legível foi encontrado.');
+    if (!carga.atual()) return;
+    if (!series.length) throw new Error('Nenhuma série de tomografia (CT) legível foi encontrada.');
     if (series.length === 1) {
       document.querySelectorAll('.cartao').forEach((c) => c.classList.remove('ativo'));
       aplicarVolume(montarVolume(series[0].arquivos, p));
       return;
     }
     escolherSerie(series);
-  });
+  }, carga.id);
 }
 
 function escolherSerie(series) {
   const cont = $('listaSeries');
-  cont.innerHTML = '';
+  cont.replaceChildren();
   for (const s of series) {
     const a = s.arquivos[0];
-    const b = document.createElement('button');
-    b.innerHTML = `<b>${a.texto('0008103E') || a.texto('00080060') || 'Série'}</b>`
-      + `<small>${a.texto('00080060')} · ${s.arquivos.length} imagens · `
-      + `${a.colunas}×${a.linhas} · ${a.sintaxeNome}</small>`;
+    const b = criarOpcaoSerie(
+      a.texto('0008103E') || a.texto('00080060') || 'Série',
+      `${a.texto('00080060')} · ${s.arquivos.length} imagens · `
+        + `${a.colunas}×${a.linhas} · ${a.sintaxeNome}`);
     b.addEventListener('click', async () => {
       $('seletorSerie').hidden = true;
+      const carga = novaCarga();
       await comProgresso(async (pp) => {
         document.querySelectorAll('.cartao').forEach((c) => c.classList.remove('ativo'));
+        if (!carga.atual()) return;
         aplicarVolume(montarVolume(s.arquivos, pp));
-      });
+      }, carga.id);
     });
     cont.append(b);
   }
@@ -411,7 +422,7 @@ function escolherSerie(series) {
 }
 
 // ---------------------------------------------------------------------------
-async function comProgresso(tarefa) {
+async function comProgresso(tarefa, cargaId = sequenciaCarga) {
   const caixa = $('carregando');
   const barra = $('barraProgresso');
   const texto = $('textoProgresso');
@@ -425,11 +436,12 @@ async function comProgresso(tarefa) {
   try {
     await tarefa(p);
   } catch (err) {
+    if (err?.name === 'AbortError') return;
     console.error(err);
     $('textoErro').textContent = err.message || String(err);
     $('erro').hidden = false;
   } finally {
-    caixa.hidden = true;
+    if (cargaId === sequenciaCarga) caixa.hidden = true;
   }
 }
 

@@ -16,7 +16,7 @@
  *   python3 scripts/serve.py 8123 &
  *   node tests/test_convencao.mjs [http://localhost:8123/]
  */
-import { chromium } from 'playwright';
+import { abrirNavegador } from './browser.mjs';
 
 const BASE = process.argv[2] || 'http://localhost:8123/';
 
@@ -28,10 +28,7 @@ const ESPERADO = {
   sagital: { h: 'esquerda', v: 'topo', porque: 'anterior / superior' },
 };
 
-const navegador = await chromium.launch({
-  executablePath: process.env.PW_CHROMIUM || '/opt/pw-browsers/chromium',
-  args: ['--no-sandbox'],
-});
+const navegador = await abrirNavegador();
 const pagina = await navegador.newPage({ viewport: { width: 900, height: 700 } });
 const falhasJs = [];
 pagina.on('pageerror', (e) => falhasJs.push(e.message));

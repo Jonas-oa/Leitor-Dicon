@@ -18,31 +18,9 @@
       "manufacturer": "SIEMENS",
       "bytes": 91704034,
       "transcodedFromJpegLs": true,
-      "notes": "TC de corpo inteiro de um estudo PET-CT, 5 mm. Cobre crânio, pescoço, tórax, abdome e pelve num único volume.",
+      "notes": "TC de corpo inteiro com cortes de 5 mm, cobrindo crânio, pescoço, tórax, abdome e pelve.",
       "attribution": "OHIF/viewer-testdata (MIT)",
       "path": "datasets/ct-corpo-inteiro"
-    },
-    {
-      "id": "pet-corpo-inteiro",
-      "label": "Corpo inteiro — PET",
-      "region": "Corpo inteiro",
-      "modality": "PT",
-      "files": 299,
-      "rows": 128,
-      "columns": 128,
-      "pixelSpacing": [
-        3.537818,
-        3.537818
-      ],
-      "sliceSpacing": 3.375,
-      "spanMm": 1005.75,
-      "seriesDescription": "PET WB_0",
-      "manufacturer": "CPS",
-      "bytes": 10590020,
-      "transcodedFromJpegLs": false,
-      "notes": "PET de corpo inteiro (protocolo cabeça-pescoço/tórax), 1005 mm de extensão craniocaudal.",
-      "attribution": "FNNDSC/data (Apache-2.0)",
-      "path": "datasets/pet-corpo-inteiro"
     },
     {
       "id": "ct-torax-alta-resolucao",
@@ -68,7 +46,7 @@
     },
     {
       "id": "ct-torax-petct",
-      "label": "Tórax — TC do PET-CT",
+      "label": "Tórax — TC 3,27 mm",
       "region": "Tórax e abdome superior",
       "modality": "CT",
       "files": 135,
@@ -84,97 +62,9 @@
       "manufacturer": "GE MEDICAL SYSTEMS",
       "bytes": 71339304,
       "transcodedFromJpegLs": true,
-      "notes": "Componente TC de um PET-CT torácico do estudo ACRIN (TCIA), registrado com a série PET abaixo.",
+      "notes": "TC volumétrica de tórax e abdome superior, com espaçamento de 3,27 mm entre cortes.",
       "attribution": "OHIF/viewer-testdata (MIT) — dados ACRIN via TCIA",
       "path": "datasets/ct-torax-petct"
-    },
-    {
-      "id": "pet-torax-petct",
-      "label": "Tórax — PET do PET-CT",
-      "region": "Tórax e abdome superior",
-      "modality": "PT",
-      "files": 135,
-      "rows": 128,
-      "columns": 128,
-      "pixelSpacing": [
-        4.6875,
-        4.6875
-      ],
-      "sliceSpacing": 3.270299,
-      "spanMm": 438.22,
-      "seriesDescription": "PET AC",
-      "manufacturer": "GE MEDICAL SYSTEMS",
-      "bytes": 5303298,
-      "transcodedFromJpegLs": true,
-      "notes": "Componente PET (corrigido por atenuação) do mesmo estudo, mesma extensão craniocaudal da TC acima.",
-      "attribution": "OHIF/viewer-testdata (MIT) — dados ACRIN via TCIA",
-      "path": "datasets/pet-torax-petct"
-    },
-    {
-      "id": "mr-cerebro-t1",
-      "label": "Encéfalo — RM T1 MPRAGE",
-      "region": "Encéfalo",
-      "modality": "MR",
-      "files": 175,
-      "rows": 192,
-      "columns": 192,
-      "pixelSpacing": [
-        1.145833,
-        1.145833
-      ],
-      "sliceSpacing": 1.005747,
-      "spanMm": 175.0,
-      "seriesDescription": "mocoMEMPRAGE_220FOV RMS",
-      "manufacturer": "SIEMENS",
-      "bytes": 27000646,
-      "transcodedFromJpegLs": false,
-      "notes": "RM ponderada em T1 (multi-eco MPRAGE), 1 mm isotrópico. Volume isotrópico ideal para reconstrução 3D.",
-      "attribution": "FNNDSC/data (Apache-2.0)",
-      "path": "datasets/mr-cerebro-t1"
-    },
-    {
-      "id": "mr-cerebro-t2",
-      "label": "Encéfalo — RM T2 axial",
-      "region": "Encéfalo",
-      "modality": "MR",
-      "files": 55,
-      "rows": 512,
-      "columns": 384,
-      "pixelSpacing": [
-        0.429688,
-        0.429688
-      ],
-      "sliceSpacing": 2.546296,
-      "spanMm": 137.5,
-      "seriesDescription": "AX FSE T2",
-      "manufacturer": "SIEMENS",
-      "bytes": 28059418,
-      "transcodedFromJpegLs": false,
-      "notes": "RM T2 FSE axial, alta resolução no plano (0,43 mm) e cortes espessos — mostra bem a anisotropia na reconstrução MPR.",
-      "attribution": "FNNDSC/data (Apache-2.0)",
-      "path": "datasets/mr-cerebro-t2"
-    },
-    {
-      "id": "mr-cranio-sagital",
-      "label": "Crânio — RM sagital 3D",
-      "region": "Crânio e encéfalo",
-      "modality": "MR",
-      "files": 130,
-      "rows": 256,
-      "columns": 256,
-      "pixelSpacing": [
-        1.0,
-        1.0
-      ],
-      "sliceSpacing": 1.3,
-      "spanMm": 167.7,
-      "seriesDescription": "SAG/RF-FAST/VOL/FLIP 20",
-      "manufacturer": "Marconi Medical Systems, Inc.",
-      "bytes": 17432006,
-      "transcodedFromJpegLs": false,
-      "notes": "Aquisição RM volumétrica sagital. Como o plano de aquisição é sagital, o corte axial e o coronal são inteiramente reconstruídos.",
-      "attribution": "Slicer/SlicerTestingData (BSD-3-Clause)",
-      "path": "datasets/mr-cranio-sagital"
     }
   ]
 }

@@ -87,10 +87,6 @@ export const PALETAS = {
     rotulo: 'Hot metal',
     tabela: paletaDe([[0, 0, 0, 0], [0.35, 180, 40, 0], [0.65, 255, 160, 20], [1, 255, 255, 235]]),
   },
-  pet: {
-    rotulo: 'PET (invertido)',
-    tabela: paletaDe([[0, 255, 255, 255], [0.4, 120, 120, 200], [0.7, 200, 60, 60], [1, 0, 0, 0]]),
-  },
   arcoiris: {
     rotulo: 'Arco-íris',
     tabela: paletaDe([[0, 0, 0, 60], [0.25, 0, 120, 255], [0.5, 0, 200, 90],
@@ -258,6 +254,9 @@ export class Viewport {
     const lut = this.estado.lut;
     const paleta = PALETAS[this.estado.paleta].tabela;
     const dados = v.dados;
+    const minJanela = this.estado.janela.centro - 0.5
+      - (this.estado.janela.largura - 1) / 2;
+    const escalaJanela = 255 / Math.max(this.estado.janela.largura - 1, 1);
     const [nx, ny] = v.dims;
     const nxy = nx * ny;
 
@@ -271,7 +270,12 @@ export class Viewport {
     for (let l = 0; l < gh; l++) {
       let idx = base + l * sLin;
       for (let c = 0; c < gw; c++) {
-        const g = lut[dados[idx] + 32768] * 3;
+        const valor = dados[idx];
+        let intensidade = Number.isInteger(valor) && valor >= -32768 && valor <= 32767
+          ? lut[valor + 32768]
+          : Math.max(0, Math.min(255, Math.round((valor - minJanela) * escalaJanela)));
+        if (v.inverterMonocromatico) intensidade = 255 - intensidade;
+        const g = intensidade * 3;
         saida[o] = paleta[g];
         saida[o + 1] = paleta[g + 1];
         saida[o + 2] = paleta[g + 2];

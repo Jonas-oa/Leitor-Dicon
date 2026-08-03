@@ -12,6 +12,7 @@ import { Renderizador3D, TRANSFERENCIAS } from './render3d.js';
 import {
   PRESETS, TRANSFER_PADRAO, PALETA_PADRAO, resolverPreset, PERFIS,
   planoDeCarga, perfilSugerido, carregarManifesto, urlsDaSerie, formatarBytes,
+  criarCartaoExame, criarOpcaoSerie, preencherDetalhes,
 } from './comum.js';
 
 const $ = (id) => document.getElementById(id);
@@ -40,6 +41,15 @@ let perfil = perfilSugerido();
 let planoAtivo = 'axial';
 let emGrade = false;
 let anim3d = null;
+let sequenciaCarga = 0;
+let controladorCarga = null;
+
+function novaCarga() {
+  controladorCarga?.abort();
+  controladorCarga = new AbortController();
+  const id = ++sequenciaCarga;
+  return { id, sinal: controladorCarga.signal, atual: () => id === sequenciaCarga };
+}
 
 // ---------------------------------------------------------------------------
 function iniciar() {
@@ -81,26 +91,20 @@ async function montarListaExames() {
     try {
       manifesto = await carregarManifesto();
     } catch {
-      lista.innerHTML = '<p class="nota">Nenhum exame de exemplo encontrado. '
-        + 'Use “Abrir arquivos do aparelho”.</p>';
+      const aviso = document.createElement('p');
+      aviso.className = 'nota';
+      aviso.textContent = 'Nenhum exame de exemplo encontrado. Use “Abrir arquivos do aparelho”.';
+      lista.replaceChildren(aviso);
       return;
     }
   }
 
-  lista.innerHTML = '';
+  lista.replaceChildren();
   for (const s of manifesto) {
     const carga = planoDeCarga(s, perfil);
-    const b = document.createElement('button');
-    b.className = 'cartao';
-    b.dataset.id = s.id;
-    b.innerHTML = `
-      <img src="datasets/${s.id}.png" alt="" loading="lazy">
-      <span>
-        <b>${s.label}</b>
-        <small>${s.region}</small>
-        <span class="tag">${s.modality} · ${carga.matriz[0]}×${carga.matriz[1]}×${carga.cortes}
-          · baixa ${formatarBytes(carga.bytes)}</span>
-      </span>`;
+    const b = criarCartaoExame(s,
+      `${s.modality} · ${carga.matriz[0]}×${carga.matriz[1]}×${carga.cortes} `
+        + `· baixa ${formatarBytes(carga.bytes)}`);
     b.addEventListener('click', () => abrirExame(s));
     lista.append(b);
   }
@@ -125,16 +129,19 @@ function marcarPerfil(nome) {
 }
 
 async function abrirExame(s) {
+  const requisicao = novaCarga();
   const carga = planoDeCarga(s, perfil);
   document.querySelectorAll('.cartao').forEach((c) => {
     c.classList.toggle('ativo', c.dataset.id === s.id);
   });
   fecharFolhas();
   await comProgresso(async (p) => {
-    const arquivos = await carregarUrls(urlsDaSerie(s, carga.passoFatia), p, 6);
+    const arquivos = await carregarUrls(urlsDaSerie(s, carga.passoFatia), p, 6,
+      requisicao.sinal);
+    if (!requisicao.atual()) return;
     p('Montando volume…', 0.9);
     aplicarVolume(montarVolume(arquivos, p, { reducaoPlano: carga.reducaoPlano }), s, carga);
-  });
+  }, requisicao.id);
 }
 
 // ---------------------------------------------------------------------------
@@ -144,7 +151,7 @@ function aplicarVolume(volume, meta = null, carga = null) {
   estado.paleta = PALETA_PADRAO[volume.modalidade] || 'cinza';
   $('ctrlPaleta').value = estado.paleta;
 
-  const presets = PRESETS[volume.modalidade] || PRESETS.MR;
+  const presets = PRESETS.CT;
   montarPresets(presets);
   definirJanela(resolverPreset(presets[0], volume));
 
@@ -161,7 +168,7 @@ function aplicarVolume(volume, meta = null, carga = null) {
   mostrarDetalhes(volume, meta, carga);
 
   if (render3d.disponivel) {
-    const t = TRANSFER_PADRAO[volume.modalidade] || 'neutra';
+    const t = TRANSFER_PADRAO.CT;
     $('ctrlTransfer').value = t;
     render3d.definirTransferencia(t);
     render3d.janela = estado.janela;
@@ -177,7 +184,7 @@ function aplicarVolume(volume, meta = null, carga = null) {
 
 function montarPresets(presets) {
   const cont = $('presets');
-  cont.innerHTML = '';
+  cont.replaceChildren();
   presets.forEach((p, i) => {
     const b = document.createElement('button');
     b.className = 'chip' + (i === 0 ? ' ativo' : '');
@@ -216,13 +223,10 @@ function mostrarDetalhes(v, meta, carga) {
     avisos.push(`Carregado em qualidade ${PERFIS[perfil].rotulo.toLowerCase()}: `
       + `${partes.join(' e ')}. As medidas em milímetros continuam corretas.`);
   }
-  if (v.obliquo) avisos.push('Aquisição oblíqua: planos alinhados ao eixo anatômico mais próximo.');
-  if (v.espacamentoIrregular) avisos.push('Espaçamento irregular entre cortes; foi usada a mediana.');
   if (meta?.notes) avisos.push(meta.notes);
   if (meta?.attribution) avisos.push(`Fonte: ${meta.attribution}.`);
 
-  $('detalhes').innerHTML = linhas.map(([k, val]) => `<div><dt>${k}</dt><dd>${val}</dd></div>`).join('')
-    + (avisos.length ? `<span class="obs">${avisos.join('<br>')}</span>` : '');
+  preencherDetalhes($('detalhes'), linhas, avisos);
 }
 
 // ---------------------------------------------------------------------------
@@ -365,7 +369,10 @@ function ligarFolhas() {
     montarListaExames();
   });
 
-  $('entradaArquivos').addEventListener('change', (e) => abrirLocais(e.target.files));
+  $('entradaArquivos').addEventListener('change', async (e) => {
+    await abrirLocais(e.target.files);
+    e.target.value = '';
+  });
   $('fecharErro').addEventListener('click', () => { $('erro').hidden = true; });
 }
 
@@ -422,22 +429,25 @@ function ligarControles() {
 // ---------------------------------------------------------------------------
 async function abrirLocais(fileList) {
   if (!fileList || !fileList.length) return;
+  const requisicao = novaCarga();
   fecharFolhas();
   await comProgresso(async (p) => {
     const series = await carregarArquivosLocais(fileList, p);
-    if (!series.length) throw new Error('Nenhum arquivo DICOM legível foi encontrado.');
+    if (!requisicao.atual()) return;
+    if (!series.length) throw new Error('Nenhuma série de tomografia (CT) legível foi encontrada.');
     if (series.length === 1) {
       abrirSerieLocal(series[0], p);
       return;
     }
     escolherSerie(series);
-  });
+  }, requisicao.id);
 }
 
 function abrirSerieLocal(serie, p) {
   const a = serie.arquivos[0];
   const carga = planoDeCarga({
-    rows: a.linhas, columns: a.colunas, files: serie.arquivos.length, bytes: 0,
+    rows: a.linhas, columns: a.colunas,
+    files: serie.arquivos.length === 1 ? a.quadros : serie.arquivos.length, bytes: 0,
   }, perfil);
   document.querySelectorAll('.cartao').forEach((c) => c.classList.remove('ativo'));
   aplicarVolume(montarVolume(serie.arquivos, p, {
@@ -447,25 +457,26 @@ function abrirSerieLocal(serie, p) {
 
 function escolherSerie(series) {
   const cont = $('listaSeries');
-  cont.innerHTML = '';
+  cont.replaceChildren();
   for (const s of series) {
     const a = s.arquivos[0];
-    const b = document.createElement('button');
-    b.className = 'cartao';
-    b.style.gridTemplateColumns = '1fr';
-    b.innerHTML = `<span><b>${a.texto('0008103E') || a.texto('00080060') || 'Série'}</b>`
-      + `<small>${a.texto('00080060')} · ${s.arquivos.length} imagens · `
-      + `${a.colunas}×${a.linhas}</small></span>`;
+    const quantidade = s.arquivos.length === 1 ? a.quadros : s.arquivos.length;
+    const b = criarOpcaoSerie(
+      a.texto('0008103E') || a.texto('00080060') || 'Série',
+      `${a.texto('00080060')} · ${quantidade} imagens · ${a.colunas}×${a.linhas}`, true);
     b.addEventListener('click', async () => {
       fecharFolhas();
-      await comProgresso(async (pp) => abrirSerieLocal(s, pp));
+      const requisicao = novaCarga();
+      await comProgresso(async (pp) => {
+        if (requisicao.atual()) abrirSerieLocal(s, pp);
+      }, requisicao.id);
     });
     cont.append(b);
   }
   abrirFolha('folhaSeries');
 }
 
-async function comProgresso(tarefa) {
+async function comProgresso(tarefa, cargaId = sequenciaCarga) {
   const caixa = $('carregando');
   caixa.hidden = false;
   $('barraProgresso').style.width = '0%';
@@ -477,11 +488,12 @@ async function comProgresso(tarefa) {
   try {
     await tarefa(p);
   } catch (err) {
+    if (err?.name === 'AbortError') return;
     console.error(err);
     $('textoErro').textContent = err.message || String(err);
     $('erro').hidden = false;
   } finally {
-    caixa.hidden = true;
+    if (cargaId === sequenciaCarga) caixa.hidden = true;
   }
 }
 

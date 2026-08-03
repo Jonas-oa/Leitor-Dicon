@@ -56,7 +56,21 @@ def main():
             print(f"  {nome:<12} {len(arquivos)} arquivos")
         except Exception as e:
             shutil.rmtree(destino)
-            print(f"  {nome:<12} PULADO ({type(e).__name__}: {e})")
+            if nome == "jpegls":
+                # Para testar a recusa do leitor basta uma encapsulação marcada
+                # como JPEG-LS; não é necessário um codificador JPEG-LS real.
+                # O payload deliberadamente não é decodificado pelo leitor.
+                from pydicom.encaps import encapsulate
+                destino.mkdir(parents=True)
+                for i, f in enumerate(arquivos, start=1):
+                    ds = pydicom.dcmread(f)
+                    ds.PixelData = encapsulate([ds.PixelData])
+                    ds["PixelData"].VR = "OB"
+                    ds.file_meta.TransferSyntaxUID = JPEGLSLossless
+                    ds.save_as(destino / f"{i:04d}.dcm", enforce_file_format=True)
+                print(f"  {nome:<12} {len(arquivos)} arquivos (marcador de sintaxe)")
+            else:
+                print(f"  {nome:<12} PULADO ({type(e).__name__}: {e})")
 
 
 if __name__ == "__main__":

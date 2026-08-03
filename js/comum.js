@@ -12,12 +12,10 @@ export const PRESETS = {
     { nome: 'Fígado', centro: 60, largura: 160 },
     { nome: 'Angio', centro: 200, largura: 600 },
   ],
-  MR: [{ nome: 'Automático', auto: true }, { nome: 'Amplo', amplo: true }],
-  PT: [{ nome: 'Automático', auto: true }, { nome: 'Amplo', amplo: true }],
 };
 
-export const TRANSFER_PADRAO = { CT: 'osso', MR: 'neutra', PT: 'frio' };
-export const PALETA_PADRAO = { CT: 'cinza', MR: 'cinza', PT: 'quente' };
+export const TRANSFER_PADRAO = { CT: 'osso' };
+export const PALETA_PADRAO = { CT: 'cinza' };
 
 /** Traduz uma predefinição de janela para valores concretos. */
 export function resolverPreset(p, volume) {
@@ -102,7 +100,7 @@ export function pareceCelular() {
 export async function carregarManifesto() {
   const resp = await fetch('datasets/manifest.json');
   if (!resp.ok) throw new Error(`manifest.json (HTTP ${resp.status})`);
-  return (await resp.json()).series;
+  return (await resp.json()).series.filter((s) => s.modality === 'CT');
 }
 
 /** URLs das fatias de uma série do manifesto, aplicando o passo entre cortes. */
@@ -116,6 +114,71 @@ export function urlsDaSerie(serie, passoFatia = 1) {
 
 export function formatarBytes(n) {
   return n >= 1e9 ? `${(n / 1e9).toFixed(1)} GB` : `${Math.round(n / 1e6)} MB`;
+}
+
+/** Monta um cartão sem interpretar metadados ou manifesto como HTML. */
+export function criarCartaoExame(serie, resumo) {
+  const botao = document.createElement('button');
+  botao.className = 'cartao';
+  botao.dataset.id = serie.id;
+
+  const img = document.createElement('img');
+  img.src = `datasets/${encodeURIComponent(serie.id)}.png`;
+  img.alt = '';
+  img.loading = 'lazy';
+
+  const corpo = document.createElement('span');
+  const titulo = document.createElement('b');
+  titulo.textContent = serie.label;
+  const regiao = document.createElement('small');
+  regiao.textContent = serie.region;
+  const tag = document.createElement('span');
+  tag.className = 'tag';
+  tag.textContent = resumo;
+  corpo.append(titulo, regiao, tag);
+  botao.append(img, corpo);
+  return botao;
+}
+
+/** Opção de série local; o texto vem de cabeçalhos DICOM não confiáveis. */
+export function criarOpcaoSerie(titulo, resumo, classeCartao = false) {
+  const botao = document.createElement('button');
+  if (classeCartao) {
+    botao.className = 'cartao';
+    botao.style.gridTemplateColumns = '1fr';
+  }
+  const corpo = document.createElement('span');
+  const forte = document.createElement('b');
+  forte.textContent = titulo;
+  const pequeno = document.createElement('small');
+  pequeno.textContent = resumo;
+  corpo.append(forte, pequeno);
+  botao.append(corpo);
+  return botao;
+}
+
+/** Preenche o quadro de detalhes sem `innerHTML`, evitando injeção por DICOM. */
+export function preencherDetalhes(elemento, linhas, avisos = []) {
+  const nos = [];
+  for (const [chave, valor] of linhas) {
+    const linha = document.createElement('div');
+    const dt = document.createElement('dt');
+    const dd = document.createElement('dd');
+    dt.textContent = chave;
+    dd.textContent = String(valor);
+    linha.append(dt, dd);
+    nos.push(linha);
+  }
+  if (avisos.length) {
+    const obs = document.createElement('span');
+    obs.className = 'obs';
+    avisos.forEach((aviso, i) => {
+      if (i) obs.append(document.createElement('br'));
+      obs.append(document.createTextNode(aviso));
+    });
+    nos.push(obs);
+  }
+  elemento.replaceChildren(...nos);
 }
 
 /** Extrai arquivos de um drop, entrando em subpastas quando possível. */

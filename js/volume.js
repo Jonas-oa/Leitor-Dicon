@@ -24,6 +24,10 @@ function produtoVetorial(a, b) {
   ];
 }
 
+function norma(v) { return Math.hypot(...v); }
+
+function produtoEscalar(a, b) { return a.reduce((s, x, i) => s + x * b[i], 0); }
+
 function eixoDominante(v) {
   let melhor = 0;
   for (let i = 1; i < 3; i++) if (Math.abs(v[i]) > Math.abs(v[melhor])) melhor = i;
@@ -84,6 +88,14 @@ export function montarVolume(arquivos, progresso = () => {}, opcoes = {}) {
   if (!validos.length) throw new Error('Nenhuma imagem legível na série.');
 
   const referencia = validos[0];
+  const modalidade = referencia.texto(TAG.Modality);
+  if (modalidade !== 'CT') {
+    throw new Error(`Este leitor foi configurado exclusivamente para tomografia (CT). `
+      + `A série selecionada informa modalidade ${modalidade || 'desconhecida'}.`);
+  }
+  if (validos.some((a) => a.texto(TAG.Modality) !== 'CT')) {
+    throw new Error('A série mistura modalidades diferentes e não pode ser tratada como uma TC.');
+  }
   const geo = referencia.geometria();
   const largura = referencia.colunas;   // índice i
   const altura = referencia.linhas;     // índice j
@@ -95,6 +107,11 @@ export function montarVolume(arquivos, progresso = () => {}, opcoes = {}) {
   const dirI = geo.orientacao.slice(0, 3);   // sentido de crescimento da coluna
   const dirJ = geo.orientacao.slice(3, 6);   // sentido de crescimento da linha
   let dirK = produtoVetorial(dirI, dirJ);
+  if (!geo.temOrientacao || Math.abs(norma(dirI) - 1) > 1e-3
+      || Math.abs(norma(dirJ) - 1) > 1e-3 || Math.abs(produtoEscalar(dirI, dirJ)) > 1e-3) {
+    throw new Error('ImageOrientationPatient ausente ou inválido; não é possível reconstruir '
+      + 'a TC com coordenadas anatômicas seguras.');
+  }
 
   // ---- ordenação das fatias -------------------------------------------------
   const fatias = consistentes.map((a) => {
@@ -104,16 +121,35 @@ export function montarVolume(arquivos, progresso = () => {}, opcoes = {}) {
   });
 
   const temPosicao = fatias.every((f) => f.geo.temPosicao);
-  if (temPosicao) {
-    fatias.sort((a, b) => a.proj - b.proj);
-  } else {
-    fatias.sort((a, b) => (a.geo.instancia ?? 0) - (b.geo.instancia ?? 0));
+  if (!temPosicao) {
+    throw new Error('ImagePositionPatient ausente; não é possível ordenar os cortes nem medir '
+      + 'a TC com segurança.');
   }
+  const orientacaoConsistente = fatias.every((f) => {
+    if (!f.geo.temOrientacao) return false;
+    return f.geo.orientacao.every((v, i) => Math.abs(v - geo.orientacao[i]) <= 1e-4);
+  });
+  const pixelConsistente = fatias.every((f) => f.geo.espacamentoPixel.every(
+    (v, i) => Number.isFinite(v) && v > 0
+      && Math.abs(v - geo.espacamentoPixel[i]) <= Math.max(1e-4, geo.espacamentoPixel[i] * 1e-3)));
+  if (!orientacaoConsistente || !pixelConsistente) {
+    throw new Error('A orientação ou o espaçamento de pixel varia entre os cortes; exporte uma '
+      + 'série CT geometricamente consistente.');
+  }
+  fatias.sort((a, b) => a.proj - b.proj);
 
-  // Multiquadro: uma única fatia com N quadros
-  let quadrosPorArquivo = 1;
+  // Multiquadro clássico: uma única instância com vários quadros e geometria
+  // no cabeçalho principal. Enhanced CT guarda geometria por quadro em
+  // sequências funcionais; enquanto elas não forem interpretadas, é mais seguro
+  // recusar do que apresentar coordenadas anatômicas incorretas.
+  let indicesQuadro = null;
   if (fatias.length === 1 && fatias[0].arquivo.quadros > 1) {
-    quadrosPorArquivo = fatias[0].arquivo.quadros;
+    if (!geo.temOrientacao || !geo.temPosicao) {
+      throw new Error('TC multiquadro aprimorada sem geometria no cabeçalho principal não é '
+        + 'suportada com segurança. Exporte a série como imagens DICOM clássicas.');
+    }
+    indicesQuadro = [];
+    for (let q = 0; q < fatias[0].arquivo.quadros; q += passoFatia) indicesQuadro.push(q);
   }
 
   // ---- espaçamento entre cortes --------------------------------------------
@@ -129,20 +165,28 @@ export function montarVolume(arquivos, progresso = () => {}, opcoes = {}) {
   }
   const espacamentoIrregular = temPosicao && gaps.length > 1
     && (Math.max(...gaps) - Math.min(...gaps)) > Math.abs(dz) * 0.15;
+  const inclinacaoGantry = fatias.slice(1).some((f, i) => {
+    const anterior = fatias[i];
+    const delta = f.geo.posicao.map((v, c) => v - anterior.geo.posicao[c]);
+    const avanco = produtoEscalar(delta, dirK);
+    return norma(delta.map((v, c) => v - avanco * dirK[c])) > 0.05;
+  });
 
   if (dz < 0) { dz = -dz; dirK = dirK.map((v) => -v); }
 
   // ---- subamostragem opcional ----------------------------------------------
   // Aplicada depois da ordenação, para que o descarte seja regular no espaço.
-  if (passoFatia > 1 && quadrosPorArquivo === 1) {
+  if (passoFatia > 1 && !indicesQuadro) {
     for (let i = 1, w = 1; i < fatias.length; i++) {
       if (i % passoFatia === 0) fatias[w++] = fatias[i];
       if (i === fatias.length - 1) fatias.length = w;
     }
     dz *= passoFatia;
+  } else if (passoFatia > 1 && indicesQuadro) {
+    dz *= passoFatia;
   }
 
-  const numFatias = fatias.length * quadrosPorArquivo;
+  const numFatias = indicesQuadro ? indicesQuadro.length : fatias.length;
   if (numFatias < 2) throw new Error('A série tem apenas uma imagem — não é um volume.');
 
   const largura2 = Math.max(1, Math.floor(largura / reducao));
@@ -152,7 +196,18 @@ export function montarVolume(arquivos, progresso = () => {}, opcoes = {}) {
 
   // ---- mapeamento dos eixos do voxel para os eixos do paciente -------------
   const eixos = [eixoDominante(dirI), eixoDominante(dirJ), eixoDominante(dirK)];
-  const obliquo = eixos.some((e) => e.pureza < 0.95);
+  // O arranjo abaixo só permuta/inverte eixos; ele não interpola uma grade
+  // oblíqua. Exija alinhamento praticamente exato (erro angular < ~2,6°).
+  const obliquo = eixos.some((e) => e.pureza < 0.999);
+
+  if (obliquo || inclinacaoGantry) {
+    throw new Error('Aquisição oblíqua ou com inclinação do gantry: este leitor não faz '
+      + 'reamostragem espacial completa e, por segurança, não exibirá medidas aproximadas.');
+  }
+  if (espacamentoIrregular) {
+    throw new Error('A série possui cortes ausentes ou espaçamento irregular. Exporte uma série '
+      + 'contínua antes de usar MPR e medidas espaciais.');
+  }
 
   // permutação: para cada eixo do paciente, qual eixo do voxel o alimenta
   const deVoxel = [-1, -1, -1];
@@ -180,13 +235,14 @@ export function montarVolume(arquivos, progresso = () => {}, opcoes = {}) {
 
   // ---- preenchimento --------------------------------------------------------
   const total = dims[0] * dims[1] * dims[2];
-  const dados = new Int16Array(total);
-  let minimo = 32767;
-  let maximo = -32768;
+  const dados = consistentes.some((a) => a.requerFloat)
+    ? new Float32Array(total) : new Int16Array(total);
+  let minimo = Infinity;
+  let maximo = -Infinity;
 
   for (let k = 0; k < numFatias; k++) {
-    const idxArquivo = quadrosPorArquivo > 1 ? 0 : k;
-    const quadro = quadrosPorArquivo > 1 ? k : 0;
+    const idxArquivo = indicesQuadro ? 0 : k;
+    const quadro = indicesQuadro ? indicesQuadro[k] : 0;
     const plano = fatias[idxArquivo].arquivo.pixels(quadro);
 
     const baseK = baseDe[2] + k * strideDe[2];
@@ -204,7 +260,7 @@ export function montarVolume(arquivos, progresso = () => {}, opcoes = {}) {
             const linha = (j * reducao + dj) * largura + i * reducao;
             for (let di = 0; di < reducao; di++) soma += plano[linha + di];
           }
-          v = Math.round(soma / divisor);
+          v = dados instanceof Float32Array ? soma / divisor : Math.round(soma / divisor);
         }
         dados[baseJ + baseDe[0] + i * strideDe[0]] = v;
         if (v < minimo) minimo = v;
@@ -252,7 +308,7 @@ export function montarVolume(arquivos, progresso = () => {}, opcoes = {}) {
     minimo,
     maximo,
     janela: { centro, largura: largura_janela },
-    modalidade: referencia.texto(TAG.Modality) || '?',
+    modalidade,
     descricaoSerie: referencia.texto(TAG.SeriesDescription),
     descricaoEstudo: referencia.texto(TAG.StudyDescription),
     fabricante: referencia.texto(TAG.Manufacturer),
@@ -263,11 +319,23 @@ export function montarVolume(arquivos, progresso = () => {}, opcoes = {}) {
     espacamentoIrregular,
     descartados,
     unidadeHU: (referencia.texto(TAG.Modality) === 'CT'),
+    inverterMonocromatico: referencia.texto(TAG.PhotometricInterpretation) === 'MONOCHROME1',
   });
 }
 
 /** Percentis aproximados via histograma — usado quando não há janela no cabeçalho. */
 function percentis(dados, fracoes) {
+  if (!(dados instanceof Int16Array)) {
+    const passo = Math.max(1, Math.ceil(dados.length / 500000));
+    const amostra = [];
+    for (let i = 0; i < dados.length; i += passo) {
+      if (Number.isFinite(dados[i])) amostra.push(dados[i]);
+    }
+    amostra.sort((a, b) => a - b);
+    if (!amostra.length) return fracoes.map(() => 0);
+    return fracoes.map((f) => amostra[Math.min(amostra.length - 1,
+      Math.max(0, Math.round(f * (amostra.length - 1))))]);
+  }
   const hist = new Uint32Array(65536);
   const passo = dados.length > 4e6 ? 7 : 1;   // amostragem em volumes grandes
   let n = 0;
@@ -290,7 +358,7 @@ function percentis(dados, fracoes) {
 /**
  * Baixa e analisa uma lista de URLs com concorrência limitada.
  */
-export async function carregarUrls(urls, progresso = () => {}, concorrencia = 8) {
+export async function carregarUrls(urls, progresso = () => {}, concorrencia = 8, sinal = null) {
   const arquivos = new Array(urls.length);
   let concluidos = 0;
   let proximo = 0;
@@ -299,7 +367,7 @@ export async function carregarUrls(urls, progresso = () => {}, concorrencia = 8)
     for (;;) {
       const i = proximo++;
       if (i >= urls.length) return;
-      const resp = await fetch(urls[i]);
+      const resp = await fetch(urls[i], { signal: sinal });
       if (!resp.ok) throw new Error(`Falha ao baixar ${urls[i]} (HTTP ${resp.status})`);
       arquivos[i] = new ArquivoDicom(await resp.arrayBuffer(), urls[i].split('/').pop());
       concluidos++;
@@ -337,7 +405,8 @@ export async function carregarArquivosLocais(fileList, progresso = () => {}) {
 
   const series = new Map();
   for (const a of arquivos) {
-    const uid = a.texto(TAG.SeriesInstanceUID) || 'sem-uid';
+    if (a.texto(TAG.Modality) !== 'CT') continue;
+    const uid = a.texto(TAG.SeriesInstanceUID) || `sem-uid:${a.nome}`;
     if (!series.has(uid)) series.set(uid, []);
     series.get(uid).push(a);
   }

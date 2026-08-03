@@ -21,7 +21,7 @@ const DICIONARIO = {
   '00180050': 'DS', '00180088': 'DS', '00181114': 'DS', '00181120': 'DS',
   '0020000D': 'UI', '0020000E': 'UI', '00200011': 'IS', '00200013': 'IS',
   '00200032': 'DS', '00200037': 'DS', '00201041': 'DS',
-  '00280002': 'US', '00280004': 'CS', '00280008': 'IS', '00280010': 'US',
+  '00280002': 'US', '00280004': 'CS', '00280006': 'US', '00280008': 'IS', '00280010': 'US',
   '00280011': 'US', '00280030': 'DS', '00280100': 'US', '00280101': 'US',
   '00280102': 'US', '00280103': 'US', '00280106': 'US', '00280107': 'US',
   '00281050': 'DS', '00281051': 'DS', '00281052': 'DS', '00281053': 'DS',
@@ -48,6 +48,7 @@ export const TAG = {
   SliceLocation: '00201041',
   SamplesPerPixel: '00280002',
   PhotometricInterpretation: '00280004',
+  PlanarConfiguration: '00280006',
   NumberOfFrames: '00280008',
   Rows: '00280010',
   Columns: '00280011',
@@ -405,10 +406,20 @@ export class ArquivoDicom {
     const altura = this.linhas;
     const total = largura * altura;
     const bitsAlocados = this.numero(TAG.BitsAllocated, 16);
+    const bitsArmazenados = this.numero(TAG.BitsStored, bitsAlocados);
+    const bitAlto = this.numero(TAG.HighBit, bitsArmazenados - 1);
     const assinado = this.numero(TAG.PixelRepresentation, 0) === 1;
     const amostras = this.numero(TAG.SamplesPerPixel, 1);
+    const planar = this.numero(TAG.PlanarConfiguration, 0);
     const bytesPorAmostra = Math.ceil(bitsAlocados / 8);
     const le = !this.bigEndian;
+
+    if (![8, 16, 32].includes(bitsAlocados)) {
+      throw new Error(`Bits Allocated não suportado: ${bitsAlocados}`);
+    }
+    if (quadro < 0 || quadro >= this.quadros) {
+      throw new Error(`Quadro ${quadro + 1} fora do intervalo (1–${this.quadros})`);
+    }
 
     let bruto; // acesso por índice de amostra
     if (el.encapsulado) {
@@ -421,41 +432,70 @@ export class ArquivoDicom {
       const bytes = descomprimirRLE(this.buffer, frag.offset, frag.length,
         largura, altura, bytesPorAmostra, amostras);
       bruto = new DataView(bytes.buffer);
-      return this._converter(bruto, 0, total, bitsAlocados, assinado, amostras, true);
+      // A descompressão acima já intercala as amostras de cada pixel.
+      return this._converter(bruto, 0, total, bitsAlocados, bitsArmazenados,
+        bitAlto, assinado, amostras, true, 0);
     }
 
     const bytesQuadro = total * bytesPorAmostra * amostras;
     const offset = el.offset + quadro * bytesQuadro;
-    return this._converter(this.view, offset, total, bitsAlocados, assinado, amostras, le);
+    return this._converter(this.view, offset, total, bitsAlocados, bitsArmazenados,
+      bitAlto, assinado, amostras, le, planar);
   }
 
-  _converter(view, offset, total, bitsAlocados, assinado, amostras, le) {
-    const saida = new Int16Array(total);
+  /**
+   * `true` quando o intervalo possível ou o rescale não cabem sem perda em
+   * Int16. TC convencional continua em Int16 para não dobrar o uso de memória;
+   * aquisições quantitativas ou fora dessa faixa usam Float32.
+   */
+  get requerFloat() {
     const inclinacao = this.numero(TAG.RescaleSlope, 1) ?? 1;
     const intercepto = this.numero(TAG.RescaleIntercept, 0) ?? 0;
-    const monocromo1 = this.texto(TAG.PhotometricInterpretation) === 'MONOCHROME1';
-    const bitsArmazenados = this.numero(TAG.BitsStored, bitsAlocados);
-    const passoAmostras = amostras;
+    const bits = Math.max(1, Math.min(32,
+      this.numero(TAG.BitsStored, this.numero(TAG.BitsAllocated, 16))));
+    const assinado = this.numero(TAG.PixelRepresentation, 0) === 1;
+    const minimoBruto = assinado ? -(2 ** (bits - 1)) : 0;
+    const maximoBruto = assinado ? 2 ** (bits - 1) - 1 : 2 ** bits - 1;
+    const extremos = [minimoBruto * inclinacao + intercepto,
+      maximoBruto * inclinacao + intercepto];
+    return !Number.isInteger(inclinacao) || !Number.isInteger(intercepto)
+      || Math.min(...extremos) < -32768 || Math.max(...extremos) > 32767;
+  }
+
+  _converter(view, offset, total, bitsAlocados, bitsArmazenados, bitAlto,
+    assinado, amostras, le, planar) {
+    const saida = this.requerFloat ? new Float32Array(total) : new Int16Array(total);
+    const inclinacao = this.numero(TAG.RescaleSlope, 1) ?? 1;
+    const intercepto = this.numero(TAG.RescaleIntercept, 0) ?? 0;
+    const bits = Math.max(1, Math.min(bitsAlocados, bitsArmazenados));
+    const deslocamento = Math.max(0, bitAlto - bits + 1);
+    const modulo = 2 ** bits;
+    const limiteSinal = modulo / 2;
+    const bytesPorAmostra = bitsAlocados / 8;
+
+    const lerAmostra = (indice) => {
+      const o = offset + indice * bytesPorAmostra;
+      let bruto;
+      if (bitsAlocados === 8) bruto = view.getUint8(o);
+      else if (bitsAlocados === 16) bruto = view.getUint16(o, le);
+      else bruto = view.getUint32(o, le);
+
+      let v = Math.floor(bruto / (2 ** deslocamento)) % modulo;
+      if (assinado && v >= limiteSinal) v -= modulo;
+      return v;
+    };
 
     for (let i = 0; i < total; i++) {
       let v;
-      if (bitsAlocados === 8) {
-        const o = offset + i * passoAmostras;
-        v = amostras >= 3
-          ? (view.getUint8(o) * 0.299 + view.getUint8(o + 1) * 0.587 + view.getUint8(o + 2) * 0.114)
-          : view.getUint8(o);
-        if (assinado && amostras === 1) v = (v << 24) >> 24;
-      } else if (bitsAlocados === 32) {
-        v = assinado ? view.getInt32(offset + i * 4, le) : view.getUint32(offset + i * 4, le);
+      if (amostras >= 3) {
+        const indice = (canal) => planar === 1 ? canal * total + i : i * amostras + canal;
+        v = lerAmostra(indice(0)) * 0.299 + lerAmostra(indice(1)) * 0.587
+          + lerAmostra(indice(2)) * 0.114;
       } else {
-        const o = offset + i * 2 * passoAmostras;
-        v = assinado ? view.getInt16(o, le) : view.getUint16(o, le);
-        // trata bits não usados (ex.: 12 bits armazenados em 16)
-        if (!assinado && bitsArmazenados < 16) v &= (1 << bitsArmazenados) - 1;
+        v = lerAmostra(i);
       }
       v = v * inclinacao + intercepto;
-      if (monocromo1) v = -v;
-      saida[i] = Math.max(-32768, Math.min(32767, Math.round(v)));
+      saida[i] = saida instanceof Int16Array ? Math.round(v) : v;
     }
     return saida;
   }
