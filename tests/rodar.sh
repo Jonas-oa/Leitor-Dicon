@@ -20,6 +20,11 @@ trap 'kill "$SERVIDOR" 2>/dev/null || true' EXIT
 sleep 2
 
 falhas=0
+
+echo
+echo "== tests/verificar_recortes.py"
+python3 tests/verificar_recortes.py || falhas=$((falhas + 1))
+
 for teste in tests/test_orientacao.mjs tests/test_convencao.mjs \
              tests/test_sintaxes.mjs tests/test_pixels.mjs \
              tests/test_seguranca.mjs tests/test_ponteiro.mjs; do

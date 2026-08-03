@@ -65,6 +65,121 @@
       "notes": "TC volumétrica de tórax e abdome superior, com espaçamento de 3,27 mm entre cortes.",
       "attribution": "OHIF/viewer-testdata (MIT) — dados ACRIN via TCIA",
       "path": "datasets/ct-torax-petct"
+    },
+    {
+      "id": "ct-seios-da-face",
+      "label": "Seios da face — TC",
+      "region": "Seios paranasais e maciço facial",
+      "modality": "CT",
+      "files": 19,
+      "rows": 268,
+      "columns": 224,
+      "pixelSpacing": [
+        0.976562,
+        0.976562
+      ],
+      "sliceSpacing": 5.0,
+      "spanMm": 90.0,
+      "seriesDescription": "Seios da face — TC",
+      "manufacturer": "SIEMENS",
+      "bytes": 2336320,
+      "transcodedFromJpegLs": false,
+      "derivado": true,
+      "notes": "Seios frontal, etmoidal, maxilar e esfenoidal, órbitas e maciço facial. Recorte da TC de corpo inteiro (5 mm) — não é um protocolo dedicado de seios da face, que usaria cortes submilimétricos.",
+      "attribution": "OHIF/viewer-testdata (MIT)",
+      "path": "datasets/ct-seios-da-face"
+    },
+    {
+      "id": "ct-pescoco",
+      "label": "Pescoço — TC",
+      "region": "Pescoço",
+      "modality": "CT",
+      "files": 20,
+      "rows": 284,
+      "columns": 220,
+      "pixelSpacing": [
+        0.976562,
+        0.976562
+      ],
+      "sliceSpacing": 5.0,
+      "spanMm": 95.0,
+      "seriesDescription": "Pescoço — TC",
+      "manufacturer": "SIEMENS",
+      "bytes": 2556660,
+      "transcodedFromJpegLs": false,
+      "derivado": true,
+      "notes": "Coluna cervical, via aérea, laringe, glândula tireoide e espaços cervicais. Recorte da TC de corpo inteiro (5 mm).",
+      "attribution": "OHIF/viewer-testdata (MIT)",
+      "path": "datasets/ct-pescoco"
+    },
+    {
+      "id": "ct-abdome",
+      "label": "Abdome — TC 2 mm",
+      "region": "Abdome",
+      "modality": "CT",
+      "files": 96,
+      "rows": 512,
+      "columns": 512,
+      "pixelSpacing": [
+        0.507812,
+        0.507812
+      ],
+      "sliceSpacing": 2.0,
+      "spanMm": 190.0,
+      "seriesDescription": "Abdome — TC 2 mm",
+      "manufacturer": "SIEMENS",
+      "bytes": 50612544,
+      "transcodedFromJpegLs": false,
+      "derivado": true,
+      "notes": "Fígado, baço, rins, alças intestinais e coluna lombar, com contraste. Recorte de uma TC de tórax e abdome de 2 mm com 0,51 mm no plano — a série de melhor resolução do conjunto.",
+      "attribution": "Slicer/SlicerTestingData (BSD-3-Clause)",
+      "path": "datasets/ct-abdome"
+    },
+    {
+      "id": "ct-membro-superior",
+      "label": "Membro superior — TC",
+      "region": "Braço direito",
+      "modality": "CT",
+      "files": 28,
+      "rows": 292,
+      "columns": 154,
+      "pixelSpacing": [
+        0.976562,
+        0.976562
+      ],
+      "sliceSpacing": 5.0,
+      "spanMm": 135.0,
+      "seriesDescription": "Membro superior — TC",
+      "manufacturer": "SIEMENS",
+      "bytes": 2598944,
+      "transcodedFromJpegLs": false,
+      "derivado": true,
+      "notes": "Braço direito (úmero e partes moles), com o membro elevado ao lado da cabeça, como é usual em PET-CT. Recorte da TC de corpo inteiro (5 mm).",
+      "attribution": "OHIF/viewer-testdata (MIT)",
+      "path": "datasets/ct-membro-superior"
+    },
+    {
+      "id": "ct-membro-inferior",
+      "label": "Membros inferiores — TC",
+      "region": "Coxas",
+      "modality": "CT",
+      "files": 24,
+      "rows": 268,
+      "columns": 410,
+      "pixelSpacing": [
+        0.976562,
+        0.976562
+      ],
+      "sliceSpacing": 5.0,
+      "spanMm": 115.0,
+      "seriesDescription": "Membros inferiores — TC",
+      "manufacturer": "SIEMENS",
+      "bytes": 5343360,
+      "transcodedFromJpegLs": false,
+      "derivado": true,
+      "notes": "Terço proximal e médio das coxas: fêmures e compartimentos musculares dos dois lados. É até onde a aquisição de corpo inteiro desce — não inclui joelhos, pernas nem pés.",
+      "attribution": "OHIF/viewer-testdata (MIT)",
+      "path": "datasets/ct-membro-inferior"
     }
   ]
 }

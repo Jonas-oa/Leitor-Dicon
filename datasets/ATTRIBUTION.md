@@ -48,6 +48,45 @@ modalidades, somente os componentes de tomografia são redistribuídos aqui.
 
 ---
 
+## Slicer/SlicerTestingData
+
+<https://github.com/Slicer/SlicerTestingData> — BSD-3-Clause (licença do 3D Slicer)
+
+| Série neste repositório | Origem |
+|---|---|
+| `ct-abdome` | `dataset1_Thorax_Abdomen.zip` — `CT_Thorax_Abdomen` (Siemens, com contraste) |
+
+Conjunto de teste do [3D Slicer](https://www.slicer.org/), usado nos testes de
+leitura DICOM e nos cursos práticos do projeto.
+
+---
+
+## Volumes regionais derivados
+
+Cinco séries são **recortes** de outras já listadas — não são aquisições
+independentes. Os cortes e os pixels são os originais; o que muda é a extensão
+da região e, quando há recorte no plano, o `ImagePositionPatient`, deslocado
+para manter a geometria exata. Cada recorte tem `SeriesInstanceUID` e
+`SOPInstanceUID` próprios, `ImageType` `DERIVED\SECONDARY` e a procedência em
+`DerivationDescription`.
+
+| Recorte | Origem | Cortes | Licença herdada |
+|---|---|---|---|
+| `ct-seios-da-face` | `ct-corpo-inteiro` | 156–174 | MIT (OHIF) |
+| `ct-pescoco` | `ct-corpo-inteiro` | 142–161 | MIT (OHIF) |
+| `ct-membro-superior` | `ct-corpo-inteiro` | 147–174 | MIT (OHIF) |
+| `ct-membro-inferior` | `ct-corpo-inteiro` | 1–24 | MIT (OHIF) |
+| `ct-abdome` | `dataset1_Thorax_Abdomen` | 80–175 | BSD-3-Clause (Slicer) |
+
+Os quatro primeiros herdam a resolução da TC de corpo inteiro (5 mm entre
+cortes) e servem para estudo da anatomia e da reconstrução multiplanar, não como
+substitutos de protocolos dedicados.
+
+`tests/verificar_recortes.py` confere que os pixels são idênticos aos da origem
+e que o desvio geométrico é zero.
+
+---
+
 ## Dados sintéticos
 
 As séries em `tests/dados/` são geradas por `tests/gerar_sinteticos.py` e

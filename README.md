@@ -9,8 +9,8 @@ São **duas interfaces sobre o mesmo motor**: uma para computador, com os quatro
 viewports lado a lado, e outra para celular, com um plano por vez e gestos de
 toque. Quem abre pelo celular é levado à versão de toque automaticamente.
 
-O repositório já vem com **3 séries de TC volumétricas reais**, de licença
-livre, cobrindo crânio, tórax, abdome e pelve.
+O repositório já vem com **8 séries de TC volumétricas reais**, de licença
+livre, cobrindo dos seios da face aos membros inferiores.
 
 | Computador (`index.html`) | Celular (`celular.html`) |
 |---|---|
@@ -189,17 +189,41 @@ Todas as séries são tomografias DICOM de exames reais, obtidas de repositório
 públicos com licença permissiva. Detalhes e créditos completos em
 [`datasets/ATTRIBUTION.md`](datasets/ATTRIBUTION.md).
 
-| Exame | Região | Mod. | Matriz | Voxel (mm) | Extensão | Tam. |
-|---|---|---|---|---|---|---|
-| Corpo inteiro — TC | crânio à coxa | CT | 512×512×174 | 0,98×0,98×5,00 | 865 mm | 92 MB |
-| Tórax — TC 2 mm | tórax | CT | 512×512×138 | 0,78×0,78×2,00 | 274 mm | 73 MB |
-| Tórax — TC 3,27 mm | tórax e abdome sup. | CT | 512×512×135 | 0,98×0,98×3,27 | 438 mm | 71 MB |
+| Exame | Região | Matriz | Voxel (mm) | Extensão | Tam. |
+|---|---|---|---|---|---|
+| Seios da face — TC ✂ | seios paranasais, órbitas | 224×268×19 | 0,98×0,98×5,00 | 90 mm | 2 MB |
+| Pescoço — TC ✂ | coluna cervical, via aérea | 220×284×20 | 0,98×0,98×5,00 | 95 mm | 3 MB |
+| Tórax — TC 2 mm | tórax | 512×512×138 | 0,78×0,78×2,00 | 274 mm | 73 MB |
+| Tórax — TC 3,27 mm | tórax e abdome sup. | 512×512×135 | 0,98×0,98×3,27 | 438 mm | 71 MB |
+| Abdome — TC 2 mm ✂ | fígado, rins, coluna lombar | 512×512×96 | 0,51×0,51×2,00 | 190 mm | 51 MB |
+| Membro superior — TC ✂ | braço direito | 154×292×28 | 0,98×0,98×5,00 | 135 mm | 3 MB |
+| Membros inferiores — TC ✂ | coxas | 410×268×24 | 0,98×0,98×5,00 | 115 mm | 5 MB |
+| Corpo inteiro — TC | crânio à coxa | 512×512×174 | 0,98×0,98×5,00 | 865 mm | 92 MB |
 
-Total: 236 MB.
+Total: 299 MB. Todas são tomografia — nenhuma série PET ou de ressonância é
+distribuída.
 
-A primeira série cobre o corpo da calota craniana ao terço proximal dos
-fêmures. As outras duas oferecem maior resolução no tórax; uma delas também
-inclui o abdome superior. Nenhuma série PET ou de ressonância é distribuída.
+### Volumes regionais (✂)
+
+Não existe, nos repositórios que este ambiente alcança, série dedicada de TC de
+seios da face, pescoço ou membros. Os cinco volumes marcados com ✂ são
+**recortes de séries reais**: os cortes e os pixels são os originais, apenas
+delimitados à região, com `ImagePositionPatient` deslocado junto para que as
+medidas em milímetros continuem exatas. Cada recorte recebe UIDs próprios (a
+norma exige, por ser imagem derivada) e registra a procedência em
+`DerivationDescription`.
+
+Quatro deles vêm da TC de corpo inteiro, de **5 mm** — mostram a anatomia
+corretamente, mas não substituem um protocolo dedicado (uma TC de seios da face
+de verdade usa cortes submilimétricos). O abdome é a exceção: vem de uma TC de
+tórax-abdome com contraste de 2 mm e 0,51 mm no plano, a melhor resolução do
+conjunto.
+
+`tests/verificar_recortes.py` confere, corte a corte, que os pixels são
+idênticos aos da origem e que o deslocamento geométrico é zero.
+
+Ainda faltam joelhos, pernas e pés: a aquisição de corpo inteiro termina no
+terço médio das coxas.
 
 ### Regerando os dados
 

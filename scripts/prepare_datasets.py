@@ -27,6 +27,7 @@ import os
 import shutil
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -48,6 +49,14 @@ SOURCES = [
         "kind": "git-sparse",
         "url": "https://github.com/OHIF/viewer-testdata.git",
         "sparse": ["dcm/acrin", "dcm/Juno"],
+    },
+    {
+        # dataset1_Thorax_Abdomen.zip — TC de tórax e abdome com contraste,
+        # 2 mm, dos cursos práticos do 3D Slicer
+        "name": "slicer-torax-abdome",
+        "kind": "zip",
+        "url": "https://github.com/Slicer/SlicerTestingData/releases/download/SHA256/"
+               "17a4199aad03a373dab27dc17e5bfcf84fc194d0a30975b4073e5b595d43a56a",
     },
 ]
 
@@ -98,6 +107,87 @@ SERIES = [
 
 
 # --------------------------------------------------------------------------
+# Recortes regionais
+#
+# Não há, nos repositórios alcançáveis, séries dedicadas de TC de seios da
+# face, pescoço ou membros. Estes volumes são recortes de séries reais — os
+# cortes e os pixels são os originais, apenas delimitados à região. Cada
+# recorte recebe novos UIDs (a norma exige isso para imagem derivada) e traz a
+# origem registrada em DerivationDescription.
+#
+#   fonte      'datasets/<id>' para uma série já preparada, ou o nome de uma
+#              fonte baixada mais o SeriesInstanceUID
+#   cortes     [primeiro, último] 1-indexado, inclusive, na ordem do volume
+#              (1 = corte mais inferior)
+#   plano      [col0, col1, lin0, lin1] recorte no plano, ou None
+# --------------------------------------------------------------------------
+RECORTES = [
+    {
+        "id": "ct-seios-da-face",
+        "label": "Seios da face — TC",
+        "region": "Seios paranasais e maciço facial",
+        "modality": "CT",
+        "origem": "ct-corpo-inteiro",
+        "cortes": [156, 174],
+        "plano": [148, 372, 36, 304],
+        "notes": "Seios frontal, etmoidal, maxilar e esfenoidal, órbitas e maciço "
+                 "facial. Recorte da TC de corpo inteiro (5 mm) — não é um "
+                 "protocolo dedicado de seios da face, que usaria cortes "
+                 "submilimétricos.",
+    },
+    {
+        "id": "ct-pescoco",
+        "label": "Pescoço — TC",
+        "region": "Pescoço",
+        "modality": "CT",
+        "origem": "ct-corpo-inteiro",
+        "cortes": [142, 161],
+        "plano": [150, 370, 52, 336],
+        "notes": "Coluna cervical, via aérea, laringe, glândula tireoide e "
+                 "espaços cervicais. Recorte da TC de corpo inteiro (5 mm).",
+    },
+    {
+        "id": "ct-abdome",
+        "label": "Abdome — TC 2 mm",
+        "region": "Abdome",
+        "modality": "CT",
+        "fonte": "slicer-torax-abdome",
+        "uid": "1.3.12.2.1107.5.1.4.50025.30000005060811542834300000776",
+        "cortes": [80, 175],
+        "plano": None,
+        "notes": "Fígado, baço, rins, alças intestinais e coluna lombar, com "
+                 "contraste. Recorte de uma TC de tórax e abdome de 2 mm com "
+                 "0,51 mm no plano — a série de melhor resolução do conjunto.",
+        "attribution": "Slicer/SlicerTestingData (BSD-3-Clause)",
+    },
+    {
+        "id": "ct-membro-superior",
+        "label": "Membro superior — TC",
+        "region": "Braço direito",
+        "modality": "CT",
+        "origem": "ct-corpo-inteiro",
+        "cortes": [147, 174],
+        "plano": [14, 168, 28, 320],
+        "notes": "Braço direito (úmero e partes moles), com o membro elevado ao "
+                 "lado da cabeça, como é usual em PET-CT. Recorte da TC de "
+                 "corpo inteiro (5 mm).",
+    },
+    {
+        "id": "ct-membro-inferior",
+        "label": "Membros inferiores — TC",
+        "region": "Coxas",
+        "modality": "CT",
+        "origem": "ct-corpo-inteiro",
+        "cortes": [1, 24],
+        "plano": [58, 468, 130, 398],
+        "notes": "Terço proximal e médio das coxas: fêmures e compartimentos "
+                 "musculares dos dois lados. É até onde a aquisição de corpo "
+                 "inteiro desce — não inclui joelhos, pernas nem pés.",
+    },
+]
+
+
+# --------------------------------------------------------------------------
 def run(cmd, **kw):
     print("  $", " ".join(str(c) for c in cmd))
     subprocess.run(cmd, check=True, **kw)
@@ -115,6 +205,13 @@ def fetch():
             run(["git", "clone", "-q", "--depth", "1", "--filter=blob:none",
                  "--sparse", src["url"], str(dest)])
             run(["git", "-C", str(dest), "sparse-checkout", "set", *src["sparse"]])
+        elif src["kind"] == "zip":
+            tmp = CACHE / f"{src['name']}.zip"
+            run(["curl", "-sSL", "--retry", "3", "-o", str(tmp), src["url"]])
+            dest.mkdir(parents=True)
+            with zipfile.ZipFile(tmp) as z:
+                z.extractall(dest)
+            tmp.unlink()
 
 
 # --------------------------------------------------------------------------
@@ -241,6 +338,8 @@ def build():
 
         write_preview(dest, entry)
 
+    manifest += construir_recortes(indexes)
+
     (OUT / "manifest.json").write_text(
         json.dumps({"series": manifest}, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8")
@@ -248,6 +347,134 @@ def build():
     print(f"\n[build] {len(manifest)} séries, {total/1e6:.1f} MB no total")
 
 
+# --------------------------------------------------------------------------
+def ordenar_serie(arquivos):
+    """Ordena pela projeção na normal e descarta posições repetidas."""
+    import pydicom as pd
+    itens = []
+    for f in arquivos:
+        ds = pd.dcmread(f, stop_before_pixels=True, force=True)
+        ipp = [float(x) for x in (getattr(ds, "ImagePositionPatient", None) or [0, 0, 0])]
+        itens.append((ds, f, ipp))
+    n = slice_normal(getattr(itens[0][0], "ImageOrientationPatient", None))
+    itens.sort(key=lambda t: t[2][0] * n[0] + t[2][1] * n[1] + t[2][2] * n[2])
+
+    unicos = []
+    vistos = set()
+    for ds, f, ipp in itens:
+        chave = round(ipp[0] * n[0] + ipp[1] * n[1] + ipp[2] * n[2], 3)
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+        unicos.append(f)
+    return unicos
+
+
+def construir_recortes(indexes):
+    """Gera os volumes regionais derivados."""
+    import numpy as np
+    import pydicom as pd
+    from pydicom.uid import generate_uid
+
+    saida = []
+    for spec in RECORTES:
+        if "origem" in spec:
+            origem = OUT / spec["origem"]
+            arquivos = sorted(origem.glob("*.dcm"))
+            atribuicao = next((s["attribution"] for s in SERIES
+                               if s["id"] == spec["origem"]), "")
+            de = f"série {spec['origem']}"
+        else:
+            fonte = spec["fonte"]
+            if fonte not in indexes:
+                print(f"[index] varrendo {fonte} ...")
+                indexes[fonte] = index_source(CACHE / fonte)
+            arquivos = ordenar_serie(indexes[fonte].get(spec["uid"], []))
+            atribuicao = spec.get("attribution", "")
+            de = fonte
+
+        if not arquivos:
+            print(f"[ERRO] recorte {spec['id']}: origem vazia")
+            continue
+
+        a, b = spec["cortes"]
+        selecao = arquivos[a - 1:b]
+        plano = spec.get("plano")
+        serie_uid = generate_uid()
+
+        dest = OUT / spec["id"]
+        if dest.exists():
+            shutil.rmtree(dest)
+        dest.mkdir(parents=True)
+
+        print(f"[recorte] {spec['id']}: cortes {a}–{b} de {de}")
+        for i, f in enumerate(selecao, start=1):
+            ds = pd.dcmread(f, force=True)
+            if plano:
+                c0, c1, l0, l1 = plano
+                arr = ds.pixel_array[l0:l1, c0:c1]
+                ipp = [float(x) for x in ds.ImagePositionPatient]
+                iop = [float(x) for x in ds.ImageOrientationPatient]
+                ps = [float(x) for x in ds.PixelSpacing]   # [linha, coluna]
+                # a origem anda c0 colunas e l0 linhas dentro do plano
+                ds.ImagePositionPatient = [
+                    f"{ipp[k] + c0 * ps[1] * iop[k] + l0 * ps[0] * iop[3 + k]:.6f}"
+                    for k in range(3)]
+                ds.Rows, ds.Columns = int(arr.shape[0]), int(arr.shape[1])
+                ds.PixelData = np.ascontiguousarray(arr).tobytes()
+                ds["PixelData"].VR = "OW"
+
+            # imagem derivada precisa de identificadores próprios
+            ds.SpecificCharacterSet = "ISO_IR 192"   # UTF-8, para os acentos
+            ds.SOPInstanceUID = generate_uid()
+            ds.file_meta.MediaStorageSOPInstanceUID = ds.SOPInstanceUID
+            ds.SeriesInstanceUID = serie_uid
+            ds.SeriesDescription = spec["label"]
+            ds.ImageType = ["DERIVED", "SECONDARY"]
+            ds.DerivationDescription = (
+                f"Recorte regional ({spec['region']}) de {de}: cortes {a}-{b}"
+                + (f", plano {plano}" if plano else "") + ".")
+            ds.save_as(dest / f"{i:04d}.dcm", enforce_file_format=True)
+
+        head = pd.dcmread(dest / "0001.dcm", stop_before_pixels=True)
+        tail = pd.dcmread(dest / f"{len(selecao):04d}.dcm", stop_before_pixels=True)
+        n = slice_normal(getattr(head, "ImageOrientationPatient", None))
+        p0 = [float(x) for x in head.ImagePositionPatient]
+        p1 = [float(x) for x in tail.ImagePositionPatient]
+        span = sum((p1[k] - p0[k]) * n[k] for k in range(3))
+        gap = abs(span) / (len(selecao) - 1) if len(selecao) > 1 else 1.0
+        ps = [float(x) for x in head.PixelSpacing]
+        nbytes = sum(f.stat().st_size for f in dest.glob("*.dcm"))
+
+        entry = {
+            "id": spec["id"],
+            "label": spec["label"],
+            "region": spec["region"],
+            "modality": spec["modality"],
+            "files": len(selecao),
+            "rows": int(head.Rows),
+            "columns": int(head.Columns),
+            "pixelSpacing": [round(ps[0], 6), round(ps[1], 6)],
+            "sliceSpacing": round(gap, 6),
+            "spanMm": round(abs(span), 2),
+            "seriesDescription": spec["label"],
+            "manufacturer": str(getattr(head, "Manufacturer", "") or ""),
+            "bytes": nbytes,
+            "transcodedFromJpegLs": False,
+            "derivado": True,
+            "notes": spec["notes"],
+            "attribution": atribuicao,
+            "path": f"datasets/{spec['id']}",
+        }
+        saida.append(entry)
+        print(f"           {entry['rows']}x{entry['columns']}x{entry['files']}  "
+              f"{ps[0]:.3f}x{ps[1]:.3f}x{gap:.3f} mm  {nbytes/1e6:.1f} MB")
+        write_preview(dest, entry)
+
+    return saida
+
+
+# --------------------------------------------------------------------------
 def write_preview(dest: Path, entry: dict):
     """Gera um PNG com um MIP coronal — usado como miniatura e para conferência."""
     import numpy as np
