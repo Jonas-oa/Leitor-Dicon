@@ -8,37 +8,49 @@
  * Convenção radiológica: axial e coronal vistos com a esquerda do paciente à
  * direita da tela; sagital visto pela esquerda do paciente, com anterior à
  * esquerda da tela.
+ *
+ * Os índices do volume canônico já crescem em LPS — x para a esquerda do
+ * paciente, y para trás, z para cima —, e o buffer é preenchido sem inversão
+ * (coluna = índice do eixo horizontal, linha = índice do eixo vertical). Logo
+ * `inverte*` só é necessário quando o sentido anatômico desejado na tela é o
+ * OPOSTO do sentido do índice:
+ *
+ *   horizontal, x  índice cresce p/ esquerda do paciente = direita da tela  ✔
+ *   vertical,   y  índice cresce p/ trás = para baixo na tela              ✔
+ *   horizontal, y  índice cresce p/ trás = direita da tela (anterior à esq) ✔
+ *   vertical,   z  índice cresce p/ cima, mas a linha do canvas cresce para
+ *                  baixo — este é o único caso que precisa inverter.
  */
 
 export const PLANOS = {
   axial: {
     rotulo: 'Axial',
     cor: '#4fa8ff',
-    eixoFixo: 2,          // z
-    eixoColuna: 0,        // x  -> horizontal
-    eixoLinha: 1,         // y  -> vertical
+    eixoFixo: 2,           // z
+    eixoColuna: 0,         // x  -> horizontal (esquerda do paciente à direita)
+    eixoLinha: 1,          // y  -> vertical (anterior no topo)
     inverteColuna: false,
-    inverteLinha: true,   // anterior no topo
+    inverteLinha: false,
     letras: { topo: 'A', base: 'P', esq: 'D', dir: 'E' },
   },
   coronal: {
     rotulo: 'Coronal',
     cor: '#5fd08a',
-    eixoFixo: 1,          // y
-    eixoColuna: 0,        // x
-    eixoLinha: 2,         // z
+    eixoFixo: 1,           // y
+    eixoColuna: 0,         // x
+    eixoLinha: 2,          // z
     inverteColuna: false,
-    inverteLinha: true,   // superior no topo
+    inverteLinha: true,    // z cresce para cima: inverte para superior no topo
     letras: { topo: 'S', base: 'I', esq: 'D', dir: 'E' },
   },
   sagital: {
     rotulo: 'Sagital',
     cor: '#f0a04b',
-    eixoFixo: 0,          // x
-    eixoColuna: 1,        // y
-    eixoLinha: 2,         // z
-    inverteColuna: true,  // anterior à esquerda
-    inverteLinha: true,   // superior no topo
+    eixoFixo: 0,           // x
+    eixoColuna: 1,         // y  -> horizontal (anterior à esquerda)
+    eixoLinha: 2,          // z
+    inverteColuna: false,
+    inverteLinha: true,    // superior no topo
     letras: { topo: 'S', base: 'I', esq: 'A', dir: 'P' },
   },
 };

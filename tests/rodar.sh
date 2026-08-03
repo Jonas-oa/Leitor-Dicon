@@ -19,7 +19,8 @@ trap 'kill "$SERVIDOR" 2>/dev/null || true' EXIT
 sleep 2
 
 falhas=0
-for teste in tests/test_orientacao.mjs tests/test_sintaxes.mjs tests/test_ponteiro.mjs; do
+for teste in tests/test_orientacao.mjs tests/test_convencao.mjs \
+             tests/test_sintaxes.mjs tests/test_ponteiro.mjs; do
   echo
   echo "== $teste"
   node "$teste" "$BASE" || falhas=$((falhas + 1))

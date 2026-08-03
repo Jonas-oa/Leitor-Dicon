@@ -122,10 +122,16 @@ o espaçamento do voxel é escalado junto, e há teste para isso.
 
 Os três planos são cortes ortogonais do mesmo volume, desenhados com o
 espaçamento físico real, então uma estrutura redonda continua redonda mesmo em
-séries anisotrópicas. A convenção é radiológica: axial e coronal com a esquerda
-do paciente à direita da tela; sagital visto pela esquerda, anterior à esquerda
-da tela. As letras de orientação (A/P/S/I/D/E) e a barra de escala aparecem em
-todos os viewports.
+séries anisotrópicas. A convenção é radiológica:
+
+| Plano | Horizontal | Vertical |
+|---|---|---|
+| Axial | esquerda do paciente à direita da tela | anterior no topo |
+| Coronal | esquerda do paciente à direita da tela | superior no topo |
+| Sagital | anterior à esquerda da tela | superior no topo |
+
+As letras de orientação (A/P/S/I/D/E) e a barra de escala aparecem em todos os
+viewports.
 
 O volume é reorientado para um sistema canônico **LPS** a partir de
 `ImageOrientationPatient` e `ImagePositionPatient`, e não da ordem dos arquivos
@@ -227,6 +233,12 @@ com o paciente espelhado — e confere que o marcador cai sempre na mesma
 coordenada anatômica. São 20 casos: cada série em resolução original e nas três
 reduções usadas no celular. Erro de 0,0 mm em resolução plena e ≤ 1 mm (metade
 de um voxel reduzido) nas versões subamostradas.
+
+`test_convencao` renderiza a série sintética e procura, nos pixels realmente
+desenhados, o marcador cuja posição LPS é conhecida (esquerda, anterior e
+superior) — conferindo que ele cai no canto certo de cada plano. É o teste que
+separa “o voxel está no índice certo” de “o voxel foi desenhado no lado certo
+da tela”.
 
 `test_sintaxes` confere que Implicit VR LE, Explicit VR BE e RLE Lossless
 produzem pixels **idênticos** à referência Explicit VR LE, e que uma série
