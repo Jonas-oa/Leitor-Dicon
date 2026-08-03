@@ -5,10 +5,16 @@ navegador**: reconstrução multiplanar (axial, coronal e sagital) e renderizaç
 volumétrica 3D, sem servidor de aplicação, sem instalação e sem enviar nenhum
 dado para fora da máquina.
 
+São **duas interfaces sobre o mesmo motor**: uma para computador, com os quatro
+viewports lado a lado, e outra para celular, com um plano por vez e gestos de
+toque. Quem abre pelo celular é levado à versão de toque automaticamente.
+
 O repositório já vem com **8 séries DICOM volumétricas reais**, de licença
 livre, cobrindo do crânio à pelve.
 
-![Corpo inteiro](docs/exemplo-corpo-inteiro.png)
+| Computador (`index.html`) | Celular (`celular.html`) |
+|---|---|
+| ![Computador](docs/exemplo-corpo-inteiro.png) | ![Celular](docs/exemplo-celular.png) |
 
 ---
 
@@ -29,15 +35,36 @@ Requisitos do navegador: qualquer Chrome, Edge, Firefox ou Safari recente.
 O 3D usa WebGL2 — se não estiver disponível, o MPR continua funcionando e o
 painel 3D explica o motivo.
 
+### Abrindo no celular
+
+Por padrão o servidor só escuta em `localhost`. Para abrir no telefone pela
+rede local:
+
+```bash
+python3 scripts/serve.py --rede
+```
+
+Ele imprime o endereço a digitar no aparelho (`http://SEU-IP:8000`) e a versão
+de toque carrega sozinha. Use só em rede de confiança: com `--rede`, qualquer
+aparelho da rede local alcança a pasta do projeto.
+
+A escolha é feita por `(pointer: coarse)` e pelo menor lado da tela (< 820 px).
+Para forçar uma ou outra: `index.html?pc=1` fica gravado naquele aparelho, e o
+link “Abrir a versão para computador” dentro do menu do celular faz o mesmo.
+Os dois arquivos podem ser abertos diretamente a qualquer momento.
+
 ### Abrindo seus próprios exames
 
-Arraste uma pasta (ou os arquivos) para a janela, ou use **Abrir pasta local**.
+No computador, arraste uma pasta (ou os arquivos) para a janela, ou use
+**Abrir pasta local**. No celular, use **Abrir arquivos do aparelho** no menu.
 Os arquivos são lidos pelo próprio navegador; nada é enviado a lugar nenhum.
-Quando a pasta contém mais de uma série, o leitor pergunta qual abrir.
+Quando há mais de uma série, o leitor pergunta qual abrir.
 
 ---
 
 ## O que dá para fazer
+
+### No computador
 
 | | |
 |---|---|
@@ -55,6 +82,41 @@ No 3D, arrastar orbita e a roda aproxima. Há botões de vista anatômica
 
 O rodapé mostra continuamente o índice do voxel, a coordenada LPS em milímetros
 e o valor sob o cursor — em **HU** quando a modalidade é TC.
+
+### No celular
+
+Um plano ocupa a tela inteira; as abas na base trocam entre axial, coronal,
+sagital, 3D e a grade 2×2. A barra de ferramentas define o que **um dedo** faz:
+
+| | |
+|---|---|
+| **Cursor** | posiciona o crosshair |
+| **Janela** | ajusta largura (horizontal) e centro (vertical) |
+| **Mover** | desloca a imagem |
+| **Cortes** | arrasta para cima/baixo para percorrer os cortes |
+
+**Dois dedos** sempre fazem pinça para zoom e arrasto para deslocar, qualquer
+que seja a ferramenta. **Dois toques** reenquadram. O controle deslizante na
+lateral direita percorre os cortes do plano em foco, e o valor sob o cursor
+aparece no canto inferior. No 3D, um dedo orbita e a pinça aproxima.
+
+![Grade 2×2 no celular](docs/exemplo-celular-grade.png)
+
+#### Qualidade de carga
+
+Séries de 512×512 não cabem confortavelmente na memória de um celular, então a
+versão de toque escolhe um perfil (ajustável no menu de exames):
+
+| Perfil | Teto | Efeito na TC de corpo inteiro |
+|---|---|---|
+| **Leve** | 12 M voxels, lado ≤ 256, ≤ 100 cortes | 256×256×87 · baixa 46 MB |
+| **Média** | 30 M voxels, lado ≤ 384, ≤ 220 cortes | 256×256×174 · baixa 92 MB |
+| **Completa** | sem redução | 512×512×174 · baixa 92 MB |
+
+O padrão vem de `navigator.deviceMemory`. Pular cortes é o que reduz o
+download; agrupar pixels no plano (pela média, não por descarte) reduz a
+memória. **As medidas em milímetros continuam corretas** em qualquer perfil —
+o espaçamento do voxel é escalado junto, e há teste para isso.
 
 ### Reconstrução multiplanar
 
@@ -156,21 +218,24 @@ geometria resolvida e um PNG de pré-visualização por série.
 ## Testes
 
 ```bash
-python3 tests/gerar_sinteticos.py     # séries sintéticas com marcador conhecido
-python3 tests/gerar_sintaxes.py       # a mesma série em 4 sintaxes diferentes
-python3 scripts/serve.py 8123 &
-node tests/test_orientacao.mjs        # reorientação para LPS
-node tests/test_sintaxes.mjs          # parser DICOM
+./tests/rodar.sh          # gera os dados, sobe o servidor e roda tudo
 ```
 
 `test_orientacao` gera séries com um marcador numa posição LPS conhecida,
 adquiridas em plano axial, sagital, coronal, com os cortes em ordem invertida e
 com o paciente espelhado — e confere que o marcador cai sempre na mesma
-coordenada anatômica (erro de 0,0 mm nos cinco casos).
+coordenada anatômica. São 20 casos: cada série em resolução original e nas três
+reduções usadas no celular. Erro de 0,0 mm em resolução plena e ≤ 1 mm (metade
+de um voxel reduzido) nas versões subamostradas.
 
 `test_sintaxes` confere que Implicit VR LE, Explicit VR BE e RLE Lossless
 produzem pixels **idênticos** à referência Explicit VR LE, e que uma série
 JPEG-LS é recusada com mensagem explicativa em vez de falhar em silêncio.
+
+`test_ponteiro` verifica que um clique ou toque cai no voxel certo em telas de
+densidade 1, 2, 3 e 2,75 — os eventos chegam em pixels de CSS, mas a geometria
+do viewport é medida em pixels do canvas. Inclui um toque real (evento
+confiável) na página do celular.
 
 Os testes usam Playwright (`npx playwright install chromium`, ou aponte
 `PW_CHROMIUM` para um Chromium existente).
@@ -180,18 +245,28 @@ Os testes usam Playwright (`npx playwright install chromium`, ou aponte
 ## Estrutura
 
 ```
-index.html                 layout dos quatro viewports
-css/style.css
-js/dicom.js                parser DICOM PS3.10 (sem dependências)
-js/volume.js               montagem e reorientação do volume para LPS
-js/mpr.js                  cortes ortogonais, janelamento, paletas, crosshair
-js/render3d.js             ray casting WebGL2 (volume e MIP)
-js/app.js                  interface e orquestração
+index.html                 versão para computador (quatro viewports)
+celular.html               versão para toque (um plano por vez)
+css/style.css              ·  css/celular.css
+
+js/dicom.js                parser DICOM PS3.10 (sem dependências)   ┐
+js/volume.js               montagem e reorientação do volume p/ LPS │ motor
+js/mpr.js                  cortes ortogonais, janelamento, gestos   │ comum
+js/render3d.js             ray casting WebGL2 (volume e MIP)        ┘
+js/comum.js                predefinições, perfis de carga, manifesto
+js/app.js                  interface de computador
+js/app-celular.js          interface de celular
+
 scripts/prepare_datasets.py
 scripts/serve.py
-tests/
+tests/                     rodar.sh + três suítes
 datasets/                  séries DICOM + manifest.json
 ```
+
+As quatro peças do motor são idênticas nas duas versões; o que muda é a casca.
+`Viewport` recebe `{ toque: true }` para instalar gestos multitoque em vez dos
+eventos de mouse, e `montarVolume` aceita `{ reducaoPlano, passoFatia }` para a
+carga adaptada do celular.
 
 Sem framework, sem *bundler*, sem dependências em tempo de execução — apenas
 módulos ES nativos. Para depurar, `window.leitorDicom` expõe o estado, os

@@ -100,7 +100,11 @@ export function construirLut(centro, largura) {
 
 // ---------------------------------------------------------------------------
 export class Viewport {
-  constructor(canvas, plano, estado) {
+  /**
+   * @param {{toque?: boolean}} opcoes  toque=true instala gestos multitoque
+   *        no lugar dos eventos de mouse (versão para celular)
+   */
+  constructor(canvas, plano, estado, opcoes = {}) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.plano = plano;
@@ -111,10 +115,44 @@ export class Viewport {
     this.buffer = document.createElement('canvas');
     this.bufferCtx = this.buffer.getContext('2d');
     this.imagem = null;
-    this._instalarEventos();
+    this.toque = !!opcoes.toque;
+    if (this.toque) this._instalarToque();
+    else this._instalarEventos();
   }
 
   get volume() { return this.estado.volume; }
+
+  /**
+   * Fator entre pixels de CSS (que é como os eventos de ponteiro chegam) e
+   * pixels do canvas (que é como `destino()` e `pan` são medidos).
+   * Sem isso, o clique cai no lugar errado em telas de alta densidade.
+   */
+  get fatorPonteiro() {
+    return [
+      this.canvas.width / Math.max(1, this.canvas.clientWidth),
+      this.canvas.height / Math.max(1, this.canvas.clientHeight),
+    ];
+  }
+
+  /** Posição de um evento em pixels do canvas. */
+  _ponto(e) {
+    const [fx, fy] = this.fatorPonteiro;
+    return [e.offsetX * fx, e.offsetY * fy];
+  }
+
+  /**
+   * Escala da sobreposição (textos, linhas, barra de escala). Ela é desenhada
+   * em pixels do canvas, então acompanha a densidade da tela — e encolhe em
+   * viewports pequenos.
+   */
+  get escalaUi() {
+    const largura = Math.max(1, this.canvas.clientWidth);
+    const densidade = Math.max(1, this.canvas.width / largura);
+    // em viewports pequenos (grade 2×2 num celular) a sobreposição encolhe
+    // junto, senão o texto toma conta da imagem
+    const compacto = Math.min(1, Math.max(0.55, largura / 380));
+    return densidade * compacto;
+  }
 
   /** Dimensões (colunas, linhas) da grade deste plano. */
   grade() {
@@ -238,6 +276,7 @@ export class Viewport {
     const cw = this.canvas.width;
     const ch = this.canvas.height;
     const def = this.def;
+    const u = this.escalaUi * (this.estado.escalaTexto || 1);
 
     // linhas do crosshair
     if (this.estado.mostrarCrosshair) {
@@ -245,8 +284,8 @@ export class Viewport {
       const eixos = [def.eixoColuna, def.eixoLinha];
       const cores = eixos.map((e) => corDoEixo(e));
       ctx.save();
-      ctx.lineWidth = 1;
-      ctx.setLineDash([6, 5]);
+      ctx.lineWidth = u;
+      ctx.setLineDash([6 * u, 5 * u]);
       ctx.globalAlpha = 0.85;
       ctx.strokeStyle = cores[1];
       ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(cw, py); ctx.stroke();
@@ -255,40 +294,41 @@ export class Viewport {
       ctx.setLineDash([]);
       ctx.globalAlpha = 1;
       ctx.fillStyle = def.cor;
-      ctx.fillRect(px - 1.5, py - 1.5, 3, 3);
+      ctx.fillRect(px - 1.5 * u, py - 1.5 * u, 3 * u, 3 * u);
       ctx.restore();
     }
 
     // letras de orientação
     ctx.save();
-    ctx.font = '600 12px ui-monospace, monospace';
+    ctx.font = `600 ${12 * u}px ui-monospace, monospace`;
     ctx.fillStyle = 'rgba(220,230,240,.75)';
     ctx.textAlign = 'center';
-    ctx.fillText(def.letras.topo, cw / 2, 16);
-    ctx.fillText(def.letras.base, cw / 2, ch - 6);
+    ctx.fillText(def.letras.topo, cw / 2, 16 * u);
+    ctx.fillText(def.letras.base, cw / 2, ch - 6 * u);
     ctx.textAlign = 'left';
-    ctx.fillText(def.letras.esq, 6, ch / 2);
+    ctx.fillText(def.letras.esq, 6 * u, ch / 2);
     ctx.textAlign = 'right';
-    ctx.fillText(def.letras.dir, cw - 6, ch / 2);
+    ctx.fillText(def.letras.dir, cw - 6 * u, ch / 2);
     ctx.restore();
 
     // rótulo do plano e número do corte
     ctx.save();
-    ctx.font = '600 12px ui-monospace, monospace';
+    ctx.font = `600 ${12 * u}px ui-monospace, monospace`;
     ctx.fillStyle = def.cor;
     ctx.textAlign = 'left';
-    ctx.fillText(def.rotulo, 8, 16);
+    ctx.fillText(def.rotulo, 8 * u, 16 * u);
     ctx.fillStyle = 'rgba(200,215,230,.8)';
-    ctx.font = '11px ui-monospace, monospace';
-    ctx.fillText(`corte ${fixo + 1}/${v.dims[def.eixoFixo]}`, 8, 30);
+    ctx.font = `${11 * u}px ui-monospace, monospace`;
+    ctx.fillText(`corte ${fixo + 1}/${v.dims[def.eixoFixo]}`, 8 * u, 30 * u);
     const mm = v.paciente(...this.estado.cursor.map((c, i) => (i === def.eixoFixo ? fixo : c)));
-    ctx.fillText(`${'xyz'[def.eixoFixo].toUpperCase()} = ${mm[def.eixoFixo].toFixed(1)} mm`, 8, 43);
+    ctx.fillText(`${'xyz'[def.eixoFixo].toUpperCase()} = ${mm[def.eixoFixo].toFixed(1)} mm`,
+      8 * u, 43 * u);
     ctx.restore();
 
-    this._barraEscala();
+    this._barraEscala(u);
   }
 
-  _barraEscala() {
+  _barraEscala(u = 1) {
     const ctx = this.ctx;
     const [, , dw] = this.destino();
     const [mmW] = this.tamanhoMm();
@@ -300,19 +340,20 @@ export class Viewport {
     let mm = candidatos[candidatos.length - 1];
     for (const c of candidatos) if (c * pxPorMm >= alvo) { mm = c; break; }
     const largura = mm * pxPorMm;
-    const x = this.canvas.width - largura - 12;
-    const y = this.canvas.height - 16;
+    const x = this.canvas.width - largura - 12 * u;
+    const y = this.canvas.height - 16 * u;
 
     ctx.save();
     ctx.strokeStyle = 'rgba(220,230,240,.8)';
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 1.5 * u;
     ctx.beginPath();
-    ctx.moveTo(x, y - 4); ctx.lineTo(x, y); ctx.lineTo(x + largura, y); ctx.lineTo(x + largura, y - 4);
+    ctx.moveTo(x, y - 4 * u); ctx.lineTo(x, y);
+    ctx.lineTo(x + largura, y); ctx.lineTo(x + largura, y - 4 * u);
     ctx.stroke();
     ctx.fillStyle = 'rgba(220,230,240,.8)';
-    ctx.font = '10px ui-monospace, monospace';
+    ctx.font = `${10 * u}px ui-monospace, monospace`;
     ctx.textAlign = 'center';
-    ctx.fillText(mm >= 10 ? `${mm / 10} cm` : `${mm} mm`, x + largura / 2, y - 6);
+    ctx.fillText(mm >= 10 ? `${mm / 10} cm` : `${mm} mm`, x + largura / 2, y - 6 * u);
     ctx.restore();
   }
 
@@ -327,24 +368,29 @@ export class Viewport {
     c.addEventListener('pointerdown', (e) => {
       if (!this.volume) return;
       c.setPointerCapture(e.pointerId);
+      const p = this._ponto(e);
       ultimo = [e.offsetX, e.offsetY];
       if (e.button === 2 || (e.button === 0 && this.estado.ferramenta === 'janela')) modo = 'janela';
       else if (e.button === 1 || (e.button === 0 && this.estado.ferramenta === 'pan')) modo = 'pan';
-      else if (e.button === 0) { modo = 'cursor'; this._moverCursor(e.offsetX, e.offsetY); }
+      else if (e.button === 0) { modo = 'cursor'; this._moverCursor(p[0], p[1]); }
     });
 
     c.addEventListener('pointermove', (e) => {
       if (!this.volume) return;
+      // dx/dy em pixels de CSS; o deslocamento da imagem é em pixels do canvas
       const dx = e.offsetX - ultimo[0];
       const dy = e.offsetY - ultimo[1];
       ultimo = [e.offsetX, e.offsetY];
+      const [fx, fy] = this.fatorPonteiro;
+      const p = this._ponto(e);
 
-      this.estado.aoPassarMouse(this, e.offsetX, e.offsetY);
+      this.estado.aoPassarMouse(this, p[0], p[1]);
 
       if (!modo) return;
-      if (modo === 'cursor') this._moverCursor(e.offsetX, e.offsetY);
-      else if (modo === 'pan') { this.pan[0] += dx; this.pan[1] += dy; this.estado.redesenhar(); }
-      else if (modo === 'janela') {
+      if (modo === 'cursor') this._moverCursor(p[0], p[1]);
+      else if (modo === 'pan') {
+        this.pan[0] += dx * fx; this.pan[1] += dy * fy; this.estado.redesenhar();
+      } else if (modo === 'janela') {
         const j = this.estado.janela;
         const passo = Math.max(1, j.largura / 200);
         j.largura = Math.max(1, j.largura + dx * passo);
@@ -362,15 +408,8 @@ export class Viewport {
       if (!this.volume) return;
       e.preventDefault();
       if (e.ctrlKey || e.metaKey) {
-        const antes = this.canvasParaVoxel(e.offsetX, e.offsetY);
-        this.zoom = Math.max(0.2, Math.min(20, this.zoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
-        const depois = this.canvasParaVoxel(e.offsetX, e.offsetY);
-        const [, , dw, dh] = this.destino();
-        const [gw, gh] = this.grade();
-        const sc = this.def.inverteColuna ? -1 : 1;
-        const sl = this.def.inverteLinha ? -1 : 1;
-        this.pan[0] += (depois[this.def.eixoColuna] - antes[this.def.eixoColuna]) * (dw / gw) * sc;
-        this.pan[1] += (depois[this.def.eixoLinha] - antes[this.def.eixoLinha]) * (dh / gh) * sl;
+        const p = this._ponto(e);
+        this.zoomEm(p[0], p[1], e.deltaY < 0 ? 1.12 : 1 / 1.12);
         this.estado.redesenhar();
       } else {
         const passo = e.deltaY > 0 ? 1 : -1;
@@ -383,6 +422,139 @@ export class Viewport {
     }, { passive: false });
 
     c.addEventListener('dblclick', () => { this.ajustar(); this.estado.redesenhar(); });
+  }
+
+  /** Aplica zoom mantendo fixo o ponto (cx, cy) do canvas. */
+  zoomEm(cx, cy, fator) {
+    const antes = this.canvasParaVoxel(cx, cy);
+    this.zoom = Math.max(0.2, Math.min(20, this.zoom * fator));
+    const depois = this.canvasParaVoxel(cx, cy);
+    const [, , dw, dh] = this.destino();
+    const [gw, gh] = this.grade();
+    const sc = this.def.inverteColuna ? -1 : 1;
+    const sl = this.def.inverteLinha ? -1 : 1;
+    this.pan[0] += (depois[this.def.eixoColuna] - antes[this.def.eixoColuna]) * (dw / gw) * sc;
+    this.pan[1] += (depois[this.def.eixoLinha] - antes[this.def.eixoLinha]) * (dh / gh) * sl;
+  }
+
+  /** Avança `passo` cortes no plano deste viewport. */
+  mudarCorte(passo) {
+    const eixo = this.def.eixoFixo;
+    const n = this.volume.dims[eixo];
+    const novo = Math.max(0, Math.min(n - 1, Math.round(this.estado.cursor[eixo]) + passo));
+    if (novo === this.estado.cursor[eixo]) return false;
+    this.estado.cursor[eixo] = novo;
+    return true;
+  }
+
+  // -------------------------------------------------------------------------
+  /**
+   * Gestos de toque (celular):
+   *   1 dedo   ação da ferramenta ativa (cursor, janela, deslocar ou cortes)
+   *   2 dedos  pinça para zoom e arrasto para deslocar — sempre disponíveis
+   *   2 toques reenquadra
+   */
+  _instalarToque() {
+    const c = this.canvas;
+    c.style.touchAction = 'none';
+    const pontos = new Map();
+    let modo = null;
+    let distAnterior = 0;
+    let centroAnterior = [0, 0];
+    let restoCorte = 0;
+    // -Infinity, e não 0: senão o primeiro toque dado nos primeiros 320 ms
+    // depois da carga seria confundido com um duplo toque
+    let ultimoToque = -Infinity;
+
+    const dedos = () => [...pontos.values()];
+
+    c.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    c.addEventListener('pointerdown', (e) => {
+      if (!this.volume) return;
+      c.setPointerCapture(e.pointerId);
+      pontos.set(e.pointerId, this._ponto(e));
+
+      if (pontos.size === 1) {
+        const agora = performance.now();
+        if (agora - ultimoToque < 320) {
+          this.ajustar();
+          this.estado.redesenhar();
+          modo = null;
+          ultimoToque = -Infinity;
+          return;
+        }
+        ultimoToque = agora;
+        modo = this.estado.ferramenta;
+        restoCorte = 0;
+        const p = this._ponto(e);
+        if (modo === 'cursor') this._moverCursor(p[0], p[1]);
+        this.estado.aoFocarViewport?.(this);
+      } else if (pontos.size === 2) {
+        modo = 'gesto';
+        const [a, b] = dedos();
+        distAnterior = Math.hypot(a[0] - b[0], a[1] - b[1]);
+        centroAnterior = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      }
+    });
+
+    c.addEventListener('pointermove', (e) => {
+      if (!this.volume || !pontos.has(e.pointerId)) return;
+      const anterior = pontos.get(e.pointerId);
+      const atual = this._ponto(e);
+      const dx = atual[0] - anterior[0];
+      const dy = atual[1] - anterior[1];
+      const [, fy] = this.fatorPonteiro;
+      pontos.set(e.pointerId, atual);
+
+      if (pontos.size >= 2) {
+        const [a, b] = dedos();
+        const dist = Math.hypot(a[0] - b[0], a[1] - b[1]);
+        const centro = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        if (distAnterior > 8 && dist > 8) this.zoomEm(centro[0], centro[1], dist / distAnterior);
+        this.pan[0] += centro[0] - centroAnterior[0];
+        this.pan[1] += centro[1] - centroAnterior[1];
+        distAnterior = dist;
+        centroAnterior = centro;
+        this.estado.redesenhar();
+        return;
+      }
+
+      if (modo === 'cursor') {
+        this._moverCursor(atual[0], atual[1]);
+      } else if (modo === 'pan') {
+        this.pan[0] += dx;
+        this.pan[1] += dy;
+        this.estado.redesenhar();
+      } else if (modo === 'janela') {
+        const j = this.estado.janela;
+        const passo = Math.max(1, j.largura / 180) / fy;
+        j.largura = Math.max(1, j.largura + dx * passo);
+        j.centro += dy * passo;
+        this.estado.aoMudarJanela();
+      } else if (modo === 'corte') {
+        // ~8 px de CSS por corte, com acúmulo para o movimento ficar suave
+        restoCorte += -dy / (8 * fy);
+        const inteiro = Math.trunc(restoCorte);
+        if (inteiro) {
+          restoCorte -= inteiro;
+          if (this.mudarCorte(inteiro)) this.estado.aoMoverCursor();
+        }
+      }
+    });
+
+    const soltar = (e) => {
+      pontos.delete(e.pointerId);
+      if (pontos.size === 0) modo = null;
+      if (pontos.size === 1) {
+        modo = 'pan';   // sobrou um dedo depois da pinça
+        const [a] = dedos();
+        centroAnterior = a;
+        distAnterior = 0;
+      }
+    };
+    c.addEventListener('pointerup', soltar);
+    c.addEventListener('pointercancel', soltar);
   }
 
   _moverCursor(cx, cy) {

@@ -62,8 +62,15 @@ export class Volume {
 /**
  * @param {ArquivoDicom[]} arquivos  fatias de UMA série
  * @param {(msg:string, frac:number)=>void} progresso
+ * @param {{reducaoPlano?:number, passoFatia?:number}} opcoes
+ *        reducaoPlano  agrupa N×N pixels no plano (média) — 1 mantém o original
+ *        passoFatia    mantém 1 fatia a cada N
+ *        Usados em aparelhos com pouca memória; a geometria em milímetros
+ *        continua correta porque o espaçamento é escalado junto.
  */
-export function montarVolume(arquivos, progresso = () => {}) {
+export function montarVolume(arquivos, progresso = () => {}, opcoes = {}) {
+  const reducao = Math.max(1, Math.round(opcoes.reducaoPlano || 1));
+  const passoFatia = Math.max(1, Math.round(opcoes.passoFatia || 1));
   if (!arquivos.length) throw new Error('Nenhum arquivo DICOM válido.');
 
   const naoSuportados = arquivos.filter((a) => !a.suportado);
@@ -108,8 +115,6 @@ export function montarVolume(arquivos, progresso = () => {}) {
   if (fatias.length === 1 && fatias[0].arquivo.quadros > 1) {
     quadrosPorArquivo = fatias[0].arquivo.quadros;
   }
-  const numFatias = fatias.length * quadrosPorArquivo;
-  if (numFatias < 2) throw new Error('A série tem apenas uma imagem — não é um volume.');
 
   // ---- espaçamento entre cortes --------------------------------------------
   let dz;
@@ -127,8 +132,23 @@ export function montarVolume(arquivos, progresso = () => {}) {
 
   if (dz < 0) { dz = -dz; dirK = dirK.map((v) => -v); }
 
-  const passoI = geo.espacamentoPixel[1];   // mm por coluna
-  const passoJ = geo.espacamentoPixel[0];   // mm por linha
+  // ---- subamostragem opcional ----------------------------------------------
+  // Aplicada depois da ordenação, para que o descarte seja regular no espaço.
+  if (passoFatia > 1 && quadrosPorArquivo === 1) {
+    for (let i = 1, w = 1; i < fatias.length; i++) {
+      if (i % passoFatia === 0) fatias[w++] = fatias[i];
+      if (i === fatias.length - 1) fatias.length = w;
+    }
+    dz *= passoFatia;
+  }
+
+  const numFatias = fatias.length * quadrosPorArquivo;
+  if (numFatias < 2) throw new Error('A série tem apenas uma imagem — não é um volume.');
+
+  const largura2 = Math.max(1, Math.floor(largura / reducao));
+  const altura2 = Math.max(1, Math.floor(altura / reducao));
+  const passoI = geo.espacamentoPixel[1] * reducao;   // mm por coluna
+  const passoJ = geo.espacamentoPixel[0] * reducao;   // mm por linha
 
   // ---- mapeamento dos eixos do voxel para os eixos do paciente -------------
   const eixos = [eixoDominante(dirI), eixoDominante(dirJ), eixoDominante(dirK)];
@@ -141,7 +161,7 @@ export function montarVolume(arquivos, progresso = () => {}) {
     throw new Error('Não foi possível mapear a orientação da série para os eixos anatômicos.');
   }
 
-  const formaVoxel = [largura, altura, numFatias];
+  const formaVoxel = [largura2, altura2, numFatias];
   const passoVoxel = [passoI, passoJ, Math.abs(dz)];
 
   const dims = deVoxel.map((iv) => formaVoxel[iv]);
@@ -170,11 +190,22 @@ export function montarVolume(arquivos, progresso = () => {}) {
     const plano = fatias[idxArquivo].arquivo.pixels(quadro);
 
     const baseK = baseDe[2] + k * strideDe[2];
-    for (let j = 0; j < altura; j++) {
+    const divisor = reducao * reducao;
+    for (let j = 0; j < altura2; j++) {
       const baseJ = baseK + baseDe[1] + j * strideDe[1];
-      const linha = j * largura;
-      for (let i = 0; i < largura; i++) {
-        const v = plano[linha + i];
+      for (let i = 0; i < largura2; i++) {
+        let v;
+        if (reducao === 1) {
+          v = plano[j * largura + i];
+        } else {
+          // média do bloco reducao×reducao: reduz ruído em vez de só descartar
+          let soma = 0;
+          for (let dj = 0; dj < reducao; dj++) {
+            const linha = (j * reducao + dj) * largura + i * reducao;
+            for (let di = 0; di < reducao; di++) soma += plano[linha + di];
+          }
+          v = Math.round(soma / divisor);
+        }
         dados[baseJ + baseDe[0] + i * strideDe[0]] = v;
         if (v < minimo) minimo = v;
         if (v > maximo) maximo = v;
@@ -198,6 +229,14 @@ export function montarVolume(arquivos, progresso = () => {}) {
   const ipp0 = fatias[0].geo.posicao;
   const direcoes = [dirI, dirJ, dirK];
   const origemCanonica = [...ipp0];
+  // com redução no plano, o novo voxel fica no centro do bloco agrupado
+  if (reducao > 1) {
+    const meio = (reducao - 1) / 2;
+    for (let c = 0; c < 3; c++) {
+      origemCanonica[c] += meio * geo.espacamentoPixel[1] * dirI[c]
+        + meio * geo.espacamentoPixel[0] * dirJ[c];
+    }
+  }
   for (let ep = 0; ep < 3; ep++) {
     if (sinais[ep] > 0) continue;
     const iv = deVoxel[ep];

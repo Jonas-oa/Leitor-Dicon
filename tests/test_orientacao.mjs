@@ -28,12 +28,21 @@ await pagina.goto(BASE);
 
 let falhas = 0;
 
+// cada série é testada em resolução original e nas reduções usadas no celular
+const CARGAS = [
+  { rotulo: '', opcoes: {} },
+  { rotulo: ' [plano ÷2]', opcoes: { reducaoPlano: 2 } },
+  { rotulo: ' [cortes ÷2]', opcoes: { passoFatia: 2 } },
+  { rotulo: ' [plano ÷2, cortes ÷2]', opcoes: { reducaoPlano: 2, passoFatia: 2 } },
+];
+
 for (const s of series) {
-  const r = await pagina.evaluate(async (spec) => {
+ for (const carga of CARGAS) {
+  const r = await pagina.evaluate(async ({ spec, opcoes }) => {
     const mv = await import('/js/volume.js');
     const urls = Array.from({ length: spec.files },
       (_, i) => `${spec.path}/${String(i + 1).padStart(4, '0')}.dcm`);
-    const vol = mv.montarVolume(await mv.carregarUrls(urls));
+    const vol = mv.montarVolume(await mv.carregarUrls(urls), () => {}, opcoes);
 
     // voxel mais brilhante
     let melhor = -1e9;
@@ -61,21 +70,25 @@ for (const s of series) {
       pico: melhor,
       lpsPico: vol.paciente(x, y, z),
       lpsCentroide: vol.paciente(sx / n, sy / n, sz / n),
+      extensao: vol.extensao,
       voxels: n,
     };
-  }, s);
+  }, { spec: s, opcoes: carga.opcoes });
 
   const esperado = s.esperado;
   const erro = r.lpsCentroide.map((v, i) => Math.abs(v - esperado[i]));
-  const ok = erro.every((e) => e <= TOLERANCIA)
-    && r.dims.join() === '50,60,40'
-    && r.espacamento.every((e) => Math.abs(e - 2) < 1e-6);
+  // a extensão física do volume tem de continuar a mesma, reduzido ou não
+  const extensaoOk = r.extensao.every((e, i) => Math.abs(e - [100, 120, 80][i]) <= 4.1);
+  const ok = erro.every((e) => e <= TOLERANCIA + (carga.opcoes.reducaoPlano ? 1 : 0))
+    && r.espacamento.every((e) => e > 0)
+    && extensaoOk;
 
   if (!ok) falhas++;
-  console.log(`${ok ? 'ok  ' : 'FALHA'} ${s.id.padEnd(18)} `
-    + `dims=${r.dims.join('×')} esp=${r.espacamento.map((e) => e.toFixed(2)).join('×')} `
-    + `centroide LPS=(${r.lpsCentroide.map((v) => v.toFixed(1)).join(', ')}) `
-    + `erro=(${erro.map((e) => e.toFixed(1)).join(', ')}) mm  pico=${r.pico}`);
+  console.log(`${ok ? 'ok  ' : 'FALHA'} ${(s.id + carga.rotulo).padEnd(40)} `
+    + `dims=${r.dims.join('×')} esp=${r.espacamento.map((e) => e.toFixed(1)).join('×')} `
+    + `centroide=(${r.lpsCentroide.map((v) => v.toFixed(1)).join(', ')}) `
+    + `erro=(${erro.map((e) => e.toFixed(1)).join(', ')}) mm`);
+ }
 }
 
 if (falhasJs.length) {

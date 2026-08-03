@@ -4,6 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Leitor DICOM — MPR e 3D</title>
+<script>
+  // Quem chega de um aparelho de toque vai para a interface de celular.
+  // ?pc=1 fica gravado e mantém esta versão no mesmo aparelho.
+  (function () {
+    var busca = new URLSearchParams(location.search);
+    if (busca.has('pc')) { try { localStorage.setItem('leitor-dicom-versao', 'pc'); } catch (e) {} return; }
+    try { if (localStorage.getItem('leitor-dicom-versao') === 'pc') return; } catch (e) {}
+    var toque = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    var estreito = Math.min(window.innerWidth, window.innerHeight) < 820;
+    if (toque && estreito) location.replace('celular.html' + location.search);
+  })();
+</script>
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230b1220'/><path d='M6 16h20M16 6v20' stroke='%234fa8ff' stroke-width='2'/><circle cx='16' cy='16' r='6' fill='none' stroke='%235fd08a' stroke-width='2'/></svg>">
 </head>
@@ -24,6 +36,7 @@
 
   <div class="topo-acoes">
     <span id="infoSerie" class="info-serie"></span>
+    <a class="botao secundario" href="celular.html" title="Interface para toque">Versão celular</a>
     <label class="botao">
       Abrir pasta local
       <input type="file" id="entradaPasta" webkitdirectory directory multiple hidden>

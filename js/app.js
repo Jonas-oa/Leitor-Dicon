@@ -5,24 +5,12 @@
 import { montarVolume, carregarUrls, carregarArquivosLocais } from './volume.js';
 import { Viewport, PALETAS, construirLut } from './mpr.js';
 import { Renderizador3D, TRANSFERENCIAS } from './render3d.js';
+import {
+  PRESETS, TRANSFER_PADRAO, PALETA_PADRAO, resolverPreset,
+  carregarManifesto as buscarManifesto, urlsDaSerie, arquivosDoDrop,
+} from './comum.js';
 
 const $ = (id) => document.getElementById(id);
-
-const PRESETS = {
-  CT: [
-    { nome: 'Tec. moles', centro: 40, largura: 400 },
-    { nome: 'Pulmão', centro: -600, largura: 1500 },
-    { nome: 'Osso', centro: 400, largura: 1800 },
-    { nome: 'Cérebro', centro: 40, largura: 80 },
-    { nome: 'Fígado', centro: 60, largura: 160 },
-    { nome: 'Angio', centro: 200, largura: 600 },
-  ],
-  MR: [{ nome: 'Automático', auto: true }, { nome: 'Amplo', amplo: true }],
-  PT: [{ nome: 'Automático', auto: true }, { nome: 'Amplo', amplo: true }],
-};
-
-const TRANSFER_PADRAO = { CT: 'osso', MR: 'neutra', PT: 'frio' };
-const PALETA_PADRAO = { CT: 'cinza', MR: 'cinza', PT: 'quente' };
 
 // ---------------------------------------------------------------------------
 const estado = {
@@ -88,9 +76,7 @@ function preencherSelects() {
 async function carregarManifesto() {
   const lista = $('listaExames');
   try {
-    const resp = await fetch('datasets/manifest.json');
-    if (!resp.ok) throw new Error(String(resp.status));
-    manifesto = (await resp.json()).series;
+    manifesto = await buscarManifesto();
   } catch {
     lista.innerHTML = '<p class="dica">Nenhum exame de exemplo encontrado. '
       + 'Rode <code>python3 scripts/prepare_datasets.py all</code> ou abra uma pasta local.</p>';
@@ -118,8 +104,7 @@ async function abrirExame(s) {
   document.querySelectorAll('.cartao').forEach((c) => {
     c.classList.toggle('ativo', c.dataset.id === s.id);
   });
-  const urls = Array.from({ length: s.files },
-    (_, i) => `${s.path}/${String(i + 1).padStart(4, '0')}.dcm`);
+  const urls = urlsDaSerie(s);
   await comProgresso(async (p) => {
     const arquivos = await carregarUrls(urls, p);
     p('Montando volume…', 0.9);
@@ -166,17 +151,6 @@ function aplicarVolume(volume, meta = null) {
 
   atualizarStatus();
   dimensionar();
-}
-
-function resolverPreset(p, volume) {
-  if (p.auto) return { centro: volume.janela.centro, largura: volume.janela.largura };
-  if (p.amplo) {
-    return {
-      centro: Math.round((volume.maximo + volume.minimo) / 2),
-      largura: Math.max(1, volume.maximo - volume.minimo),
-    };
-  }
-  return { centro: p.centro, largura: p.largura };
 }
 
 function montarPresets(presets) {
@@ -399,31 +373,6 @@ function ligarArrastarSoltar() {
     const arquivos = await arquivosDoDrop(e.dataTransfer);
     if (arquivos.length) abrirLocais(arquivos);
   });
-}
-
-/** Extrai arquivos de um drop, entrando em subpastas quando possível. */
-async function arquivosDoDrop(dt) {
-  const itens = Array.from(dt.items || []);
-  const entradas = itens
-    .map((i) => (i.webkitGetAsEntry ? i.webkitGetAsEntry() : null))
-    .filter(Boolean);
-  if (!entradas.length) return Array.from(dt.files || []);
-
-  const saida = [];
-  async function percorrer(entrada) {
-    if (entrada.isFile) {
-      saida.push(await new Promise((res, rej) => entrada.file(res, rej)));
-    } else if (entrada.isDirectory) {
-      const leitor = entrada.createReader();
-      for (;;) {
-        const lote = await new Promise((res, rej) => leitor.readEntries(res, rej));
-        if (!lote.length) break;
-        for (const e of lote) await percorrer(e);
-      }
-    }
-  }
-  for (const e of entradas) await percorrer(e);
-  return saida;
 }
 
 async function abrirLocais(fileList) {

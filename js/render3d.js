@@ -484,29 +484,61 @@ export class Renderizador3D {
     gl.bindVertexArray(null);
   }
 
+  aproximar(fator) {
+    this.distancia = Math.max(0.6, Math.min(8, this.distancia * fator));
+  }
+
+  /** Um dedo/botão orbita; dois dedos fazem pinça para aproximar. */
   _instalarEventos() {
     const c = this.canvas;
-    let arrastando = false;
+    c.style.touchAction = 'none';
+    const pontos = new Map();
     let ultimo = [0, 0];
+    let distAnterior = 0;
+
     c.addEventListener('contextmenu', (e) => e.preventDefault());
+
     c.addEventListener('pointerdown', (e) => {
-      arrastando = true;
-      ultimo = [e.offsetX, e.offsetY];
       c.setPointerCapture(e.pointerId);
+      pontos.set(e.pointerId, [e.offsetX, e.offsetY]);
+      ultimo = [e.offsetX, e.offsetY];
+      if (pontos.size === 2) {
+        const [a, b] = [...pontos.values()];
+        distAnterior = Math.hypot(a[0] - b[0], a[1] - b[1]);
+      }
     });
+
     c.addEventListener('pointermove', (e) => {
-      if (!arrastando) return;
+      if (!pontos.has(e.pointerId)) return;
+      pontos.set(e.pointerId, [e.offsetX, e.offsetY]);
+
+      if (pontos.size >= 2) {
+        const [a, b] = [...pontos.values()];
+        const dist = Math.hypot(a[0] - b[0], a[1] - b[1]);
+        if (distAnterior > 8 && dist > 8) this.aproximar(distAnterior / dist);
+        distAnterior = dist;
+        this.aoMudar?.();
+        return;
+      }
+
       this.azimute += (e.offsetX - ultimo[0]) * 0.45;
       this.elevacao = Math.max(-89, Math.min(89, this.elevacao + (e.offsetY - ultimo[1]) * 0.45));
       ultimo = [e.offsetX, e.offsetY];
       this.aoMudar?.();
     });
-    const parar = () => { arrastando = false; };
-    c.addEventListener('pointerup', parar);
-    c.addEventListener('pointercancel', parar);
+
+    const soltar = (e) => {
+      pontos.delete(e.pointerId);
+      distAnterior = 0;
+      const restante = [...pontos.values()][0];
+      if (restante) ultimo = restante;
+    };
+    c.addEventListener('pointerup', soltar);
+    c.addEventListener('pointercancel', soltar);
+
     c.addEventListener('wheel', (e) => {
       e.preventDefault();
-      this.distancia = Math.max(0.9, Math.min(8, this.distancia * (e.deltaY > 0 ? 1.1 : 1 / 1.1)));
+      this.aproximar(e.deltaY > 0 ? 1.1 : 1 / 1.1);
       this.aoMudar?.();
     }, { passive: false });
   }
