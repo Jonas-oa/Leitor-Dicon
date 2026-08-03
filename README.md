@@ -1,6 +1,6 @@
-# Leitor DICOM — MPR e reconstrução 3D
+# Leitor DICOM de TC — MPR e reconstrução 3D
 
-Visualizador de imagens médicas DICOM que roda **inteiramente offline no
+Visualizador de tomografia computadorizada (TC) em DICOM que roda **inteiramente offline no
 navegador**: reconstrução multiplanar (axial, coronal e sagital) e renderização
 volumétrica 3D, sem servidor de aplicação, sem instalação e sem enviar nenhum
 dado para fora da máquina.
@@ -9,8 +9,8 @@ São **duas interfaces sobre o mesmo motor**: uma para computador, com os quatro
 viewports lado a lado, e outra para celular, com um plano por vez e gestos de
 toque. Quem abre pelo celular é levado à versão de toque automaticamente.
 
-O repositório já vem com **8 séries DICOM volumétricas reais**, de licença
-livre, cobrindo do crânio à pelve.
+O repositório já vem com **3 séries de TC volumétricas reais**, de licença
+livre, cobrindo crânio, tórax, abdome e pelve.
 
 | Computador (`index.html`) | Celular (`celular.html`) |
 |---|---|
@@ -58,7 +58,9 @@ Os dois arquivos podem ser abertos diretamente a qualquer momento.
 No computador, arraste uma pasta (ou os arquivos) para a janela, ou use
 **Abrir pasta local**. No celular, use **Abrir arquivos do aparelho** no menu.
 Os arquivos são lidos pelo próprio navegador; nada é enviado a lugar nenhum.
-Quando há mais de uma série, o leitor pergunta qual abrir.
+Quando há mais de uma série de TC, o leitor pergunta qual abrir. Outras
+modalidades são ignoradas e, se não houver uma TC válida, a interface explica
+o motivo.
 
 ---
 
@@ -81,7 +83,7 @@ No 3D, arrastar orbita e a roda aproxima. Há botões de vista anatômica
 (anterior, posterior, esquerda, direita, superior, inferior).
 
 O rodapé mostra continuamente o índice do voxel, a coordenada LPS em milímetros
-e o valor sob o cursor — em **HU** quando a modalidade é TC.
+e o valor sob o cursor em **HU**.
 
 ### No celular
 
@@ -147,14 +149,13 @@ preservados (HU inclusive).
   sombreamento de Phong a partir do gradiente.
 - **MIP** — projeção de intensidade máxima.
 
-Funções de transferência para osso/pele, tecidos moles, vasos, PET e cinza;
+Funções de transferência para osso/pele, tecidos moles, vasos e cinza;
 controles de opacidade, plano de corte superior e qualidade de amostragem.
 
 ### Janelamento
 
-Predefinições por modalidade (tecidos moles, pulmão, osso, cérebro, fígado,
-angio para TC; automática e ampla para RM/PET) além dos controles contínuos.
-Paletas: cinza, *hot metal*, PET invertido e arco-íris.
+Predefinições de TC para tecidos moles, pulmão, osso, cérebro, fígado e angio,
+além dos controles contínuos. Paletas: cinza, *hot metal* e arco-íris.
 
 ---
 
@@ -168,9 +169,12 @@ Paletas: cinza, *hot metal*, PET invertido e arco-íris.
 | `1.2.840.10008.1.2.5` RLE Lossless | ✅ |
 | JPEG / JPEG-LS / JPEG 2000 / Deflated | ❌ recusado com mensagem explícita |
 
-Suporta 8, 16 e 32 bits, com e sem sinal, `MONOCHROME1`/`MONOCHROME2` e RGB
-(convertido para luminância), *rescale* (slope/intercept), multiquadro e
-espaçamento irregular entre cortes (usa a mediana e avisa na interface).
+Suporta TC em 8, 16 e 32 bits, com e sem sinal, `MONOCHROME1`/`MONOCHROME2` e
+RGB intercalado ou planar (convertido para luminância), além de *rescale*
+(slope/intercept). Multiquadro clássico é aceito quando a geometria está no
+cabeçalho principal. Séries oblíquas, Enhanced CT sem geometria suficiente ou
+com cortes ausentes/espaçamento irregular são recusadas para evitar medidas e
+reconstruções incorretas.
 
 Séries comprimidas com JPEG não são abertas — implementar esses decodificadores
 em JavaScript puro estava fora do escopo. As duas séries de exemplo que vinham
@@ -181,31 +185,21 @@ preparação; os pixels são bit-a-bit idênticos aos originais.
 
 ## Exames incluídos
 
-Todas as séries são DICOM de verdade, de exames reais, obtidas de repositórios
+Todas as séries são tomografias DICOM de exames reais, obtidas de repositórios
 públicos com licença permissiva. Detalhes e créditos completos em
 [`datasets/ATTRIBUTION.md`](datasets/ATTRIBUTION.md).
 
 | Exame | Região | Mod. | Matriz | Voxel (mm) | Extensão | Tam. |
 |---|---|---|---|---|---|---|
 | Corpo inteiro — TC | crânio à coxa | CT | 512×512×174 | 0,98×0,98×5,00 | 865 mm | 92 MB |
-| Corpo inteiro — PET | corpo inteiro | PT | 128×128×299 | 3,54×3,54×3,38 | 1006 mm | 11 MB |
 | Tórax — TC 2 mm | tórax | CT | 512×512×138 | 0,78×0,78×2,00 | 274 mm | 73 MB |
-| Tórax — TC do PET-CT | tórax e abdome sup. | CT | 512×512×135 | 0,98×0,98×3,27 | 438 mm | 71 MB |
-| Tórax — PET do PET-CT | tórax e abdome sup. | PT | 128×128×135 | 4,69×4,69×3,27 | 438 mm | 5 MB |
-| Encéfalo — RM T1 MPRAGE | encéfalo | MR | 192×192×175 | 1,15×1,15×1,01 | 175 mm | 27 MB |
-| Encéfalo — RM T2 axial | encéfalo | MR | 512×384×55 | 0,43×0,43×2,55 | 138 mm | 28 MB |
-| Crânio — RM sagital 3D | crânio e encéfalo | MR | 256×256×130 | 1,00×1,00×1,30 | 168 mm | 17 MB |
+| Tórax — TC 3,27 mm | tórax e abdome sup. | CT | 512×512×135 | 0,98×0,98×3,27 | 438 mm | 71 MB |
 
-Total: 324 MB.
+Total: 236 MB.
 
-As duas primeiras séries cobrem **todas as regiões do corpo** num único volume
-(da calota craniana ao terço proximal dos fêmures); as demais são exemplos de
-alta resolução por região. Sobre o que **não** entrou: não foi possível incluir
-séries dedicadas de joelho, coluna, mama ou CBCT odontológico — as fontes
-públicas dessas regiões (TCIA, Zenodo, data.kitware.com) não são acessíveis a
-partir deste ambiente, e as que estão no GitHub têm licença copyleft (AGPL)
-incompatível com o restante do projeto. Coluna e pelve aparecem, porém, dentro
-dos volumes de corpo inteiro.
+A primeira série cobre o corpo da calota craniana ao terço proximal dos
+fêmures. As outras duas oferecem maior resolução no tórax; uma delas também
+inclui o abdome superior. Nenhuma série PET ou de ressonância é distribuída.
 
 ### Regerando os dados
 
@@ -224,6 +218,9 @@ geometria resolvida e um PNG de pré-visualização por série.
 ## Testes
 
 ```bash
+python3 -m pip install -r requirements-test.txt
+npm install
+npx playwright install chromium
 ./tests/rodar.sh          # gera os dados, sobe o servidor e roda tudo
 ```
 
@@ -249,6 +246,13 @@ densidade 1, 2, 3 e 2,75 — os eventos chegam em pixels de CSS, mas a geometria
 do viewport é medida em pixels do canvas. Inclui um toque real (evento
 confiável) na página do celular.
 
+`test_pixels` cobre valores CT assinados de 12 bits, inteiros sem sinal de 16
+bits, *rescale* fracionário, RGB planar e a inversão visual de `MONOCHROME1`.
+Também confirma que modalidades diferentes de CT são recusadas.
+
+`test_seguranca` abre cabeçalhos DICOM com metadados maliciosos e confirma que
+eles são exibidos como texto, sem execução de HTML ou JavaScript.
+
 Os testes usam Playwright (`npx playwright install chromium`, ou aponte
 `PW_CHROMIUM` para um Chromium existente).
 
@@ -271,8 +275,8 @@ js/app-celular.js          interface de celular
 
 scripts/prepare_datasets.py
 scripts/serve.py
-tests/                     rodar.sh + três suítes
-datasets/                  séries DICOM + manifest.json
+tests/                     rodar.sh + seis suítes
+datasets/                  três séries de TC + manifest.json
 ```
 
 As quatro peças do motor são idênticas nas duas versões; o que muda é a casca.

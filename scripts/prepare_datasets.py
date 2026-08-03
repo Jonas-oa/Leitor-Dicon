@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Baixa e prepara as séries DICOM volumétricas de exemplo do Leitor DICOM.
+Baixa e prepara as três séries DICOM de tomografia do Leitor DICOM.
 
 Todas as fontes são repositórios públicos no GitHub com licença permissiva
 (ver datasets/ATTRIBUTION.md). O script:
@@ -27,14 +27,11 @@ import os
 import shutil
 import subprocess
 import sys
-import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / ".cache" / "sources"
 OUT = ROOT / "datasets"
-
-SLICER_DATA = "https://github.com/Slicer/SlicerTestingData/releases/download/SHA256"
 
 # --------------------------------------------------------------------------
 # Fontes (todas em github.com, licenças permissivas)
@@ -44,18 +41,13 @@ SOURCES = [
         "name": "fnndsc",
         "kind": "git-sparse",
         "url": "https://github.com/FNNDSC/data.git",
-        "sparse": ["dicom/adi_brain", "dicom/andrei_abdomen", "dicom/rsna_2"],
+        "sparse": ["dicom/andrei_abdomen"],
     },
     {
         "name": "ohif",
         "kind": "git-sparse",
         "url": "https://github.com/OHIF/viewer-testdata.git",
         "sparse": ["dcm/acrin", "dcm/Juno"],
-    },
-    {
-        "name": "slicer-mrhead",
-        "kind": "zip",
-        "url": f"{SLICER_DATA}/899f3f8617ca53bad7dca0b2908478319e708b48ff41dfa64b6bac1d76529928",
     },
 ]
 
@@ -72,21 +64,9 @@ SERIES = [
         "uid": "1.3.6.1.4.1.25403.345050719074.3824.20170125113545.4",
         "source": "ohif",
         "step": 1,
-        "notes": "TC de corpo inteiro de um estudo PET-CT, 5 mm. Cobre crânio, "
-                 "pescoço, tórax, abdome e pelve num único volume.",
+        "notes": "TC de corpo inteiro com cortes de 5 mm, cobrindo crânio, "
+                 "pescoço, tórax, abdome e pelve.",
         "attribution": "OHIF/viewer-testdata (MIT)",
-    },
-    {
-        "id": "pet-corpo-inteiro",
-        "label": "Corpo inteiro — PET",
-        "region": "Corpo inteiro",
-        "modality": "PT",
-        "uid": "1.3.6.1.4.1.14519.5.2.1.2744.7002.117357550898198415937979788256",
-        "source": "fnndsc",
-        "step": 1,
-        "notes": "PET de corpo inteiro (protocolo cabeça-pescoço/tórax), "
-                 "1005 mm de extensão craniocaudal.",
-        "attribution": "FNNDSC/data (Apache-2.0)",
     },
     {
         "id": "ct-torax-alta-resolucao",
@@ -104,63 +84,15 @@ SERIES = [
     },
     {
         "id": "ct-torax-petct",
-        "label": "Tórax — TC do PET-CT",
+        "label": "Tórax — TC 3,27 mm",
         "region": "Tórax e abdome superior",
         "modality": "CT",
         "uid": "1.3.6.1.4.1.14519.5.2.1.7009.2403.226151125820845824875394858561",
         "source": "ohif",
         "step": 1,
-        "notes": "Componente TC de um PET-CT torácico do estudo ACRIN (TCIA), "
-                 "registrado com a série PET abaixo.",
+        "notes": "TC volumétrica de tórax e abdome superior, com espaçamento "
+                 "de 3,27 mm entre cortes.",
         "attribution": "OHIF/viewer-testdata (MIT) — dados ACRIN via TCIA",
-    },
-    {
-        "id": "pet-torax-petct",
-        "label": "Tórax — PET do PET-CT",
-        "region": "Tórax e abdome superior",
-        "modality": "PT",
-        "uid": "1.3.6.1.4.1.14519.5.2.1.7009.2403.879445243400782656317561081015",
-        "source": "ohif",
-        "step": 1,
-        "notes": "Componente PET (corrigido por atenuação) do mesmo estudo, "
-                 "mesma extensão craniocaudal da TC acima.",
-        "attribution": "OHIF/viewer-testdata (MIT) — dados ACRIN via TCIA",
-    },
-    {
-        "id": "mr-cerebro-t1",
-        "label": "Encéfalo — RM T1 MPRAGE",
-        "region": "Encéfalo",
-        "modality": "MR",
-        "uid": "1.3.12.2.1107.5.2.32.35235.2012041417312491079284166.0.0.0",
-        "source": "fnndsc",
-        "step": 1,
-        "notes": "RM ponderada em T1 (multi-eco MPRAGE), 1 mm isotrópico. "
-                 "Volume isotrópico ideal para reconstrução 3D.",
-        "attribution": "FNNDSC/data (Apache-2.0)",
-    },
-    {
-        "id": "mr-cerebro-t2",
-        "label": "Encéfalo — RM T2 axial",
-        "region": "Encéfalo",
-        "modality": "MR",
-        "uid": "1.3.12.2.1107.5.2.32.35235.2012041417405580603808736.0.0.0",
-        "source": "fnndsc",
-        "step": 1,
-        "notes": "RM T2 FSE axial, alta resolução no plano (0,43 mm) e cortes "
-                 "espessos — mostra bem a anisotropia na reconstrução MPR.",
-        "attribution": "FNNDSC/data (Apache-2.0)",
-    },
-    {
-        "id": "mr-cranio-sagital",
-        "label": "Crânio — RM sagital 3D",
-        "region": "Crânio e encéfalo",
-        "modality": "MR",
-        "uid": "1.3.6.1.4.1.5962.99.1.3814087073.479799962.1489872804257.270.0",
-        "source": "slicer-mrhead",
-        "step": 1,
-        "notes": "Aquisição RM volumétrica sagital. Como o plano de aquisição é "
-                 "sagital, o corte axial e o coronal são inteiramente reconstruídos.",
-        "attribution": "Slicer/SlicerTestingData (BSD-3-Clause)",
     },
 ]
 
@@ -183,13 +115,6 @@ def fetch():
             run(["git", "clone", "-q", "--depth", "1", "--filter=blob:none",
                  "--sparse", src["url"], str(dest)])
             run(["git", "-C", str(dest), "sparse-checkout", "set", *src["sparse"]])
-        elif src["kind"] == "zip":
-            tmp = CACHE / f"{src['name']}.zip"
-            run(["curl", "-sSL", "--retry", "3", "-o", str(tmp), src["url"]])
-            dest.mkdir(parents=True)
-            with zipfile.ZipFile(tmp) as z:
-                z.extractall(dest)
-            tmp.unlink()
 
 
 # --------------------------------------------------------------------------
@@ -244,6 +169,10 @@ def build():
         if not files:
             print(f"[ERRO] série {spec['id']} não encontrada em {src}")
             continue
+
+        primeira = pydicom.dcmread(files[0], stop_before_pixels=True, force=True)
+        if str(getattr(primeira, "Modality", "")) != "CT":
+            raise RuntimeError(f"{spec['id']}: a fonte não é uma série CT")
 
         # ordena pela posição ao longo da normal do corte
         import pydicom as pd

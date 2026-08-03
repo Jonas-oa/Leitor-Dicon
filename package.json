@@ -1,0 +1,11 @@
+{
+  "name": "leitor-dicom-ct",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "./tests/rodar.sh"
+  },
+  "devDependencies": {
+    "playwright": "1.54.2"
+  }
+}

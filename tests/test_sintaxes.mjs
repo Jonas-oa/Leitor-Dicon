@@ -8,7 +8,7 @@
  *   python3 scripts/serve.py 8123 &
  *   node tests/test_sintaxes.mjs [http://localhost:8123/]
  */
-import { chromium } from 'playwright';
+import { abrirNavegador } from './browser.mjs';
 
 const BASE = process.argv[2] || 'http://localhost:8123/';
 const N = 12;   // as variantes têm 12 cortes
@@ -21,10 +21,7 @@ const CASOS = [
   { dir: 'tests/dados/sintaxe-jpegls', nome: 'jpeg-ls (não suportado)', suportado: false },
 ];
 
-const navegador = await chromium.launch({
-  executablePath: process.env.PW_CHROMIUM || '/opt/pw-browsers/chromium',
-  args: ['--no-sandbox'],
-});
+const navegador = await abrirNavegador();
 const pagina = await navegador.newPage();
 await pagina.goto(BASE);
 

@@ -11,6 +11,7 @@ BASE="http://localhost:${PORTA}/"
 echo "== gerando dados sintéticos"
 python3 tests/gerar_sinteticos.py
 python3 tests/gerar_sintaxes.py
+python3 tests/gerar_pixels.py
 
 echo "== subindo servidor em ${BASE}"
 python3 scripts/serve.py "$PORTA" >/dev/null 2>&1 &
@@ -20,7 +21,8 @@ sleep 2
 
 falhas=0
 for teste in tests/test_orientacao.mjs tests/test_convencao.mjs \
-             tests/test_sintaxes.mjs tests/test_ponteiro.mjs; do
+             tests/test_sintaxes.mjs tests/test_pixels.mjs \
+             tests/test_seguranca.mjs tests/test_ponteiro.mjs; do
   echo
   echo "== $teste"
   node "$teste" "$BASE" || falhas=$((falhas + 1))

@@ -7,16 +7,13 @@
  *   python3 scripts/serve.py 8123 &
  *   node tests/test_ponteiro.mjs [http://localhost:8123/]
  */
-import { chromium } from 'playwright';
+import { abrirNavegador } from './browser.mjs';
 
 const BASE = process.argv[2] || 'http://localhost:8123/';
 const DENSIDADES = [1, 2, 3];
 const TOLERANCIA = 1.5;   // voxels
 
-const navegador = await chromium.launch({
-  executablePath: process.env.PW_CHROMIUM || '/opt/pw-browsers/chromium',
-  args: ['--no-sandbox'],
-});
+const navegador = await abrirNavegador();
 
 let falhas = 0;
 

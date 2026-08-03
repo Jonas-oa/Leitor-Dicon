@@ -6,7 +6,7 @@
  *   python3 scripts/serve.py 8123 &
  *   node tests/test_orientacao.mjs [http://localhost:8123/]
  */
-import { chromium } from 'playwright';
+import { abrirNavegador } from './browser.mjs';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -17,10 +17,7 @@ const TOLERANCIA = 2.5;  // mm (o voxel sintético tem 2 mm)
 
 const series = JSON.parse(readFileSync(join(RAIZ, 'tests/dados/series.json'), 'utf8'));
 
-const navegador = await chromium.launch({
-  executablePath: process.env.PW_CHROMIUM || '/opt/pw-browsers/chromium',
-  args: ['--no-sandbox'],
-});
+const navegador = await abrirNavegador();
 const pagina = await navegador.newPage();
 const falhasJs = [];
 pagina.on('pageerror', (e) => falhasJs.push(e.message));

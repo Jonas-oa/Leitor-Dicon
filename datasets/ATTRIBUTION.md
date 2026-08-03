@@ -1,6 +1,6 @@
 # Créditos e licenças dos exames
 
-Todas as séries em `datasets/` são imagens DICOM reais, anonimizadas,
+As três séries em `datasets/` são tomografias DICOM reais, anonimizadas,
 redistribuídas de repositórios públicos com licença permissiva. Nenhuma foi
 sintetizada ou convertida de outro formato.
 
@@ -25,12 +25,7 @@ Center. Conjunto de dados de exemplo da biblioteca [AMI](https://github.com/FNND
 
 | Série neste repositório | Origem no repositório |
 |---|---|
-| `pet-corpo-inteiro` | `dicom/rsna_2/PET` — PET de corpo inteiro, `PET WB_0` |
 | `ct-torax-alta-resolucao` | `dicom/andrei_abdomen/data` — TC de tórax 1 mm (**1 de cada 2 fatias**, ≈ 2 mm) |
-| `mr-cerebro-t1` | `dicom/adi_brain` — `mocoMEMPRAGE_220FOV RMS` |
-| `mr-cerebro-t2` | `dicom/adi_brain` — `AX FSE T2` |
-
-As séries de encéfalo são de um voluntário sadio (*Normal Volunteer Protocol*).
 
 ## OHIF/viewer-testdata
 
@@ -39,28 +34,17 @@ Open Health Imaging Foundation.
 
 | Série neste repositório | Origem no repositório |
 |---|---|
-| `ct-corpo-inteiro` | `dcm/Juno` — `CT WB 5.0 B35f`, componente TC de um PET-CT |
+| `ct-corpo-inteiro` | `dcm/Juno` — `CT WB 5.0 B35f`, série de TC de corpo inteiro |
 | `ct-torax-petct` | `dcm/acrin` — `CT IMAGES` |
-| `pet-torax-petct` | `dcm/acrin` — `PET AC` (corrigida por atenuação) |
 
 As séries `dcm/acrin` são dados do estudo ACRIN obtidos do
 [The Cancer Imaging Archive (TCIA)](https://www.cancerimagingarchive.net/),
 distribuídos pelo TCIA sob **CC BY 3.0**. Ao usá-las, cite o TCIA conforme a
 [política de citação](https://www.cancerimagingarchive.net/data-usage-policies-and-restrictions/).
 
-`ct-corpo-inteiro`, `ct-torax-petct` e `pet-torax-petct` estavam em JPEG-LS
-Lossless na origem e foram transcodificadas sem perdas.
-
-## Slicer/SlicerTestingData
-
-<https://github.com/Slicer/SlicerTestingData> — BSD-3-Clause (licença do 3D Slicer)
-
-| Série neste repositório | Origem |
-|---|---|
-| `mr-cranio-sagital` | `deidentifiedMRHead-dcm-one-series.zip` — `SAG/RF-FAST/VOL/FLIP 20` |
-
-Conjunto de teste do [3D Slicer](https://www.slicer.org/), usado nos testes de
-leitura DICOM do projeto.
+`ct-corpo-inteiro` e `ct-torax-petct` estavam em JPEG-LS Lossless na origem e
+foram transcodificadas sem perdas. Embora as fontes também contenham outras
+modalidades, somente os componentes de tomografia são redistribuídos aqui.
 
 ---
 
@@ -68,7 +52,8 @@ leitura DICOM do projeto.
 
 As séries em `tests/dados/` são geradas por `tests/gerar_sinteticos.py` e
 `tests/gerar_sintaxes.py`. Não contêm dados de pacientes: são padrões
-geométricos criados para verificar a reorientação do volume e o parser.
+geométricos criados para verificar a reorientação do volume, o parser e a
+recusa explícita de modalidades diferentes de CT.
 
 ---
 
