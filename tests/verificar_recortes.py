@@ -20,7 +20,8 @@ import pydicom
 
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ / "scripts"))
-from prepare_datasets import RECORTES, slice_normal   # noqa: E402
+from prepare_datasets import (RECORTES, slice_normal,   # noqa: E402
+                              index_source, ordenar_serie)
 
 TOLERANCIA_MM = 0.01
 
@@ -39,11 +40,19 @@ def main():
     falhas = 0
 
     for spec in RECORTES:
-        if "origem" not in spec:
-            print(f"—     {spec['id']:<20} origem externa, sem série local para comparar")
-            continue
+        if "origem" in spec:
+            origem = sorted((RAIZ / "datasets" / spec["origem"]).glob("*.dcm"))
+            de = spec["origem"]
+        else:
+            # recorte de fonte baixada: só dá para conferir com o cache presente
+            cache = RAIZ / ".cache" / "sources" / spec["fonte"]
+            if not cache.exists():
+                print(f"—     {spec['id']:<20} fonte {spec['fonte']} fora do cache; "
+                      f"rode `prepare_datasets.py fetch` para poder conferir")
+                continue
+            origem = ordenar_serie(index_source(cache).get(spec["uid"], []))
+            de = spec["fonte"]
 
-        origem = sorted((RAIZ / "datasets" / spec["origem"]).glob("*.dcm"))
         destino = sorted((RAIZ / "datasets" / spec["id"]).glob("*.dcm"))
         a, b = spec["cortes"]
         esperados = origem[a - 1:b]
@@ -86,7 +95,7 @@ def main():
             falhas += 1
         print(f"{'ok   ' if ok else 'FALHA'} {spec['id']:<20} "
               f"{m.get('columns')}×{m.get('rows')}×{m.get('files')} "
-              f"de {spec['origem']} cortes {a}–{b}"
+              f"de {de} cortes {a}–{b}"
               + (f"  — {'; '.join(problemas)}" if problemas
                  else f"  · pixels idênticos · desvio {piorMm:.4f} mm"))
 

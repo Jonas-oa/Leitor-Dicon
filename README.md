@@ -195,12 +195,12 @@ públicos com licença permissiva. Detalhes e créditos completos em
 | Pescoço — TC ✂ | coluna cervical, via aérea | 220×284×20 | 0,98×0,98×5,00 | 95 mm | 3 MB |
 | Tórax — TC 2 mm | tórax | 512×512×138 | 0,78×0,78×2,00 | 274 mm | 73 MB |
 | Tórax — TC 3,27 mm | tórax e abdome sup. | 512×512×135 | 0,98×0,98×3,27 | 438 mm | 71 MB |
-| Abdome — TC 2 mm ✂ | fígado, rins, coluna lombar | 512×512×96 | 0,51×0,51×2,00 | 190 mm | 51 MB |
+| Abdome total — TC 2 mm ✂ | sínfise púbica à cúpula diafragmática | 512×512×198 | 0,51×0,51×2,00 | 394 mm | 104 MB |
 | Membro superior — TC ✂ | braço direito | 154×292×28 | 0,98×0,98×5,00 | 135 mm | 3 MB |
 | Membros inferiores — TC ✂ | coxas | 410×268×24 | 0,98×0,98×5,00 | 115 mm | 5 MB |
 | Corpo inteiro — TC | crânio à coxa | 512×512×174 | 0,98×0,98×5,00 | 865 mm | 92 MB |
 
-Total: 299 MB. Todas são tomografia — nenhuma série PET ou de ressonância é
+Total: 353 MB. Todas são tomografia — nenhuma série PET ou de ressonância é
 distribuída.
 
 ### Volumes regionais (✂)
@@ -215,9 +215,13 @@ norma exige, por ser imagem derivada) e registra a procedência em
 
 Quatro deles vêm da TC de corpo inteiro, de **5 mm** — mostram a anatomia
 corretamente, mas não substituem um protocolo dedicado (uma TC de seios da face
-de verdade usa cortes submilimétricos). O abdome é a exceção: vem de uma TC de
-tórax-abdome com contraste de 2 mm e 0,51 mm no plano, a melhor resolução do
-conjunto.
+de verdade usa cortes submilimétricos).
+
+O **abdome total** é a exceção e o volume de maior resolução do conjunto: vem de
+uma TC de tórax-abdome com contraste, voxel de 0,51 × 0,51 × 2,0 mm, recortada
+entre a sínfise púbica e as cúpulas diafragmáticas (394 mm) — os dois limites
+foram conferidos corte a corte na série de origem. Cobre fígado, baço, rins,
+pâncreas, alças intestinais, aorta e ilíacas, coluna lombar e pelve.
 
 `tests/verificar_recortes.py` confere, corte a corte, que os pixels são
 idênticos aos da origem e que o deslocamento geométrico é zero.

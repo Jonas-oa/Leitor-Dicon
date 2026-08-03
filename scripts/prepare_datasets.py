@@ -148,16 +148,19 @@ RECORTES = [
     },
     {
         "id": "ct-abdome",
-        "label": "Abdome — TC 2 mm",
-        "region": "Abdome",
+        "label": "Abdome total — TC 2 mm",
+        "region": "Abdome e pelve (sínfise púbica à cúpula diafragmática)",
         "modality": "CT",
         "fonte": "slicer-torax-abdome",
         "uid": "1.3.12.2.1107.5.1.4.50025.30000005060811542834300000776",
-        "cortes": [80, 175],
+        # limites conferidos corte a corte na origem: o corte 1 já está na
+        # sínfise púbica e o fígado desaparece por volta do corte 197
+        "cortes": [1, 198],
         "plano": None,
-        "notes": "Fígado, baço, rins, alças intestinais e coluna lombar, com "
-                 "contraste. Recorte de uma TC de tórax e abdome de 2 mm com "
-                 "0,51 mm no plano — a série de melhor resolução do conjunto.",
+        "notes": "Abdome total com contraste, da sínfise púbica às cúpulas "
+                 "diafragmáticas (394 mm): fígado, baço, rins, pâncreas, alças "
+                 "intestinais, grandes vasos, coluna lombar e pelve. Voxel de "
+                 "0,51 × 0,51 × 2,0 mm — a maior resolução do conjunto.",
         "attribution": "Slicer/SlicerTestingData (BSD-3-Clause)",
     },
     {
